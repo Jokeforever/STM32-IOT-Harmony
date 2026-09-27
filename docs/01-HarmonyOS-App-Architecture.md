@@ -64,8 +64,8 @@ DEVICE_NAME
 
 - `USER_ID`：OneNET 用户 ID
 - `ACCESS_KEY`：用户级 author_key，不是设备 MQTT 密钥
-- `PRODUCT_ID`：当前产品 ID，例如 `OCuh518nh5`
-- `DEVICE_NAME`：当前设备名，例如 `SA1`
+- `PRODUCT_ID`：当前产品 ID，例如 
+- `DEVICE_NAME`：当前设备名，例如 
 
 安全提醒：
 
