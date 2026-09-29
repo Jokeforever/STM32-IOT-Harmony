@@ -1,0 +1,20 @@
+# Keil MDK build outputs
+MDK-ARM/IOT/
+MDK-ARM/DebugConfig/
+MDK-ARM/RTE/
+MDK-ARM/*.uvguix.*
+MDK-ARM/*.build_log.htm
+MDK-ARM/*.htm
+MDK-ARM/*.map
+MDK-ARM/*.lnp
+MDK-ARM/*.dep
+MDK-ARM/*.bak
+MDK-ARM/*.scvd
+
+# Compiled objects
+*.o
+*.crf
+*.d
+*.axf
+*.hex
+*.bin

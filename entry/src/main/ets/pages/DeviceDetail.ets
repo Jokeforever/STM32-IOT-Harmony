@@ -283,7 +283,7 @@ export struct DeviceDetail {
     try {
       await this.oneNetApi.setLedMode(mode);
       this.ledMode = mode;
-      await this.refreshData();
+      // 先保持用户选择的模式，等待 STM32 下一次上报后再由自动刷新确认。
     } catch (error) {
       const err = error as Error;
       this.errorMessage = '控制失败：' + err.message;
@@ -303,7 +303,7 @@ export struct DeviceDetail {
     try {
       await this.oneNetApi.setBumpMode(mode);
       this.bumpMode = mode;
-      await this.refreshData();
+      // 先保持用户选择的模式，等待 STM32 下一次上报后再由自动刷新确认。
     } catch (error) {
       const err = error as Error;
       this.errorMessage = '控制失败：' + err.message;
