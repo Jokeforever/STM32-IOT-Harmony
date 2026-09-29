@@ -1,78 +1,205 @@
-# STM32 端代码功能讲解
+# STM32 端代码功能讲解（完整版）
 
-## 1. 工程概况
+## 0. 这份文档怎么用
 
-当前 STM32 工程路径：
+本文不是“引脚初始化手册”，而是从功能角度讲解 STM32 端每个模块：
+
+- 这个模块做什么
+- 数据从哪里来
+- 数据怎么处理
+- 数据怎么上传到 OneNET
+- 云端命令怎么下发到执行器
+- 代码里关键函数和变量是什么
+
+建议配合以下目录阅读：
 
 ```text
 E:\fuchuang\code\IOT5-smart2-IOT-final
 ```
 
-主要特点：
+## 1. 工程概况
 
-- MCU：STM32F103C8T6
-- 开发方式：Keil MDK + STM32 HAL
-- 当前主程序是裸机主循环 + 中断方式，没有强制依赖 FreeRTOS
-- 通信方式：ESP8266 + MQTT
-- 云平台：OneNET 旧版物模型
+### 1.1 硬件
+
+| 项目 | 内容 |
+|---|---|
+| MCU | STM32F103C8T6 |
+| 开发工具 | Keil MDK |
+| 驱动库 | STM32 HAL |
+| 网络模块 | ESP8266 |
+| 云平台 | OneNET 旧版物模型 |
+| 显示 | OLED |
+| 传感器 | DHT11、土壤湿度、光敏、CO2 |
+| 执行器 | LED、水泵 |
+
+### 1.2 软件结构
+
+当前主程序是：
+
+- 裸机主循环
+- 中断接收串口
+- 没有强制使用 FreeRTOS
+
+主循环负责：
+
+- 采集传感器
+- 控制 LED
+- 控制水泵
+- 显示 OLED
+- 上传 OneNET
+- 处理云端下发
+
+### 1.3 主要目录
+
+```text
+IOT5-smart2-IOT-final
+├── Core/
+│   ├── Inc/
+│   └── Src/
+├── Drivers/
+├── MDK-ARM/
+└── onenet/
+    ├── device/
+    ├── MQTT/
+    └── onenet/
+```
 
 ## 2. 引脚与设备对应关系
 
-| 引脚 | 功能 | 说明 |
+### 2.1 完整引脚表
+
+| 引脚 | 外设/功能 | 说明 |
 |---|---|---|
 | PA0 | DHT11 | 温湿度传感器 |
-| PA1 | 土壤湿度 | ADC1_IN1 |
-| PA2 / PA3 | USART2 | ESP8266 通信 |
-| PA4 | 按键 | 页面/功能键 |
-| PA5 | 按键 | 页面/功能键 |
-| PA6 | 按键 | 水泵模式键 |
-| PA7 | TIM3_CH2 | LED PWM 输出 |
-| PA9 / PA10 | USART1 | 调试串口 |
-| PB0 | 光照传感器 | ADC1_IN8 |
-| PB1 | 水泵 | 继电器/驱动控制 |
-| PB7 | 按键 | LED 模式键 |
-| PB8 / PB9 | OLED | I2C1 SCL/SDA |
-| PB10 / PB11 | USART3 | CO2 传感器 |
-| PB12 | 蜂鸣器 | 报警输出 |
-| PC13 | 板载 LED | 状态指示 |
+| PA1 | ADC1_IN1 | 土壤湿度传感器 |
+| PA2 | USART2_TX | ESP8266 RX |
+| PA3 | USART2_RX | ESP8266 TX |
+| PA4 | GPIO_Input | 按键 1 |
+| PA5 | GPIO_Input | 按键 2 |
+| PA6 | GPIO_Input | 水泵模式键 |
+| PA7 | TIM3_CH2 | LED PWM |
+| PA9 | USART1_TX | 调试串口 TX |
+| PA10 | USART1_RX | 调试串口 RX |
+| PB0 | ADC1_IN8 | 光敏传感器 |
+| PB1 | GPIO_Output | 水泵控制 |
+| PB7 | GPIO_Input | LED 模式键 |
+| PB8 | I2C1_SCL | OLED SCL |
+| PB9 | I2C1_SDA | OLED SDA |
+| PB10 | USART3_TX | CO2 传感器 |
+| PB11 | USART3_RX | CO2 传感器 |
+| PB12 | GPIO_Output | 蜂鸣器 |
+| PC13 | GPIO_Output | 板载 LED |
 
-注意：
+### 2.2 串口分配
 
-- USART1 主要用于调试打印，115200
-- USART2 连接 ESP8266，115200
-- USART3 连接 CO2 传感器，9600
+| 串口 | 引脚 | 波特率 | 用途 |
+|---|---|---|---|
+| USART1 | PA9/PA10 | 115200 | 调试打印 |
+| USART2 | PA2/PA3 | 115200 | ESP8266 |
+| USART3 | PB10/PB11 | 9600 | CO2 传感器 |
+
+### 2.3 特别注意
+
+- ESP8266 只能使用 2.4GHz WiFi
+- ESP8266 供电要足够，建议独立 3.3V 电源
+- USART1 调试口接 USB-TTL 时要交叉连接 TX/RX
 - OLED 使用 PB8/PB9
 
-## 3. 主程序结构
+## 3. 主程序 `main.c`
 
-核心文件：
+### 3.1 初始化流程
 
-```text
-Core/Src/main.c
+主程序启动后依次完成：
+
+1. `HAL_Init()`
+2. `SystemClock_Config()`
+3. `MX_GPIO_Init()`
+4. `MX_ADC1_Init()`
+5. `MX_I2C1_Init()`
+6. `MX_USART1_UART_Init()`
+7. `MX_USART2_UART_Init()`
+8. `MX_TIM4_Init()`
+9. `MX_TIM1_Init()`
+10. `MX_USART3_UART_Init()`
+11. `MX_TIM3_Init()`
+12. `Hardware_Init()`
+13. 开启串口中断接收
+14. `ESP8266_Init()`
+15. 连接 OneNET MQTT
+16. 订阅属性 set 主题
+17. 进入主循环
+
+### 3.2 `Hardware_Init()`
+
+主要初始化：
+
+- DHT11
+- OLED
+- 其他硬件
+
+如果 DHT11 初始化失败，会循环显示错误。
+
+### 3.3 主循环
+
+主循环大致做这些事：
+
+```c
+while (1)
+{
+    Key_Func();
+
+    if (++timeCount >= 100)
+    {
+        TS_GetData(&moist);
+        CO2GetData(&ppm);
+        DHT11_Read_Data(&temp, &humi);
+        LDR_LuxData(&light);
+        OneNet_SendData();
+        timeCount = 0;
+        ESP8266_Clear();
+    }
+
+    dataPtr = ESP8266_GetIPD(0);
+    if (dataPtr != NULL)
+        OneNet_RevPro(dataPtr);
+
+    Bump_Control();
+    Monitor_Temp();
+    LED_Func();
+    IS_Normal();
+    Display_Data();
+
+    delay_ms(10);
+}
 ```
 
-主程序主要流程：
+时间关系：
 
-1. HAL 初始化
-2. 时钟、GPIO、ADC、I2C、USART、TIM 初始化
-3. `Hardware_Init()` 初始化 DHT11、OLED 等
-4. `ESP8266_Init()` 初始化 ESP8266 并连接 WiFi
-5. 连接 OneNET MQTT
-6. `OneNET_Subscribe()` 订阅属性 set 主题
-7. 主循环：
-   - 按键扫描
-   - 每秒读取传感器
-   - `OneNet_SendData()` 上报属性
-   - `OneNet_RevPro()` 处理云端下发
-   - `Bump_Control()` 水泵控制
-   - `Monitor_Temp()` 温度监测
-   - `LED_Func()` LED 控制
-   - `IS_Normal()` 异常报警
-   - `Display_Data()` OLED 显示
+- 主循环约 10ms 一次
+- `timeCount >= 100` 约等于 1 秒
+- 所以传感器和 OneNET 上报频率约为 1Hz
 
-## 4. 传感器与数据采集模块
+### 3.4 全局数据
 
-### 4.1 DHT11 温湿度
+主要全局变量：
+
+| 变量 | 含义 |
+|---|---|
+| `temp` | 空气温度 |
+| `humi` | 空气湿度 |
+| `light` | 光照强度 |
+| `ppm` | CO2 浓度 |
+| `moist` | 土壤湿度 |
+| `water_vol` | 水量 |
+| `CurrentBump_mode` | 当前水泵模式 |
+| `current_mode` | 当前 LED 模式 |
+| `CO2_Threhold` | CO2 阈值 |
+| `Bump_threhold[2]` | 土壤湿度上下限 |
+| `temp_threhold` | 温度阈值 |
+
+## 4. 传感器模块
+
+## 4.1 DHT11 温湿度
 
 文件：
 
@@ -83,8 +210,8 @@ Core/Inc/dht11.h
 
 作用：
 
-- 读取空气温度和湿度
-- 输出到 `temp`、`humi`
+- 单总线读取空气温度
+- 单总线读取空气湿度
 
 引脚：
 
@@ -92,7 +219,24 @@ Core/Inc/dht11.h
 PA0
 ```
 
-### 4.2 土壤湿度
+主要函数：
+
+| 函数 | 作用 |
+|---|---|
+| `DHT11_Init()` | 初始化 DHT11 |
+| `DHT11_Read_Data()` | 读取温度和湿度 |
+| `DHT11_Read_Byte()` | 读取一个字节 |
+| `DHT11_Read_Bit()` | 读取一位 |
+| `DHT11_Check()` | 检测 DHT11 |
+| `DHT11_Rst()` | 复位 DHT11 |
+
+数据：
+
+```c
+DHT11_Read_Data(&temp, &humi);
+```
+
+## 4.2 土壤湿度
 
 文件：
 
@@ -103,16 +247,31 @@ Core/Inc/TS.h
 
 作用：
 
-- 通过 ADC 读取土壤湿度
-- 输出到 `moist`
+- 通过 ADC 读取土壤湿度传感器
+- 多次采样求平均
+- 输出湿度百分比
 
 引脚：
 
 ```text
-PA1 / ADC1_IN1
+PA1
+ADC1_IN1
 ```
 
-### 4.3 光照强度
+主要函数：
+
+| 函数 | 作用 |
+|---|---|
+| `TS_Init()` | 初始化 |
+| `TS_GetData(&moist)` | 读取土壤湿度 |
+
+每次读取：
+
+```c
+TS_GetData(&moist);
+```
+
+## 4.3 光照强度
 
 文件：
 
@@ -123,16 +282,31 @@ Core/Inc/LDR.h
 
 作用：
 
-- 通过 ADC 读取光敏电阻电压
-- 转换为 `light` 光照强度
+- ADC 读取光敏电阻电压
+- 转换为 lux 光照强度
 
 引脚：
 
 ```text
-PB0 / ADC1_IN8
+PB0
+ADC1_IN8
 ```
 
-### 4.4 CO2 传感器
+主要函数：
+
+| 函数 | 作用 |
+|---|---|
+| `LDR_Init()` | 初始化 |
+| `LDR_Average_Data()` | 多次采样求平均 |
+| `LDR_LuxData(&light)` | 转换成光照强度 |
+
+每次读取：
+
+```c
+LDR_LuxData(&light);
+```
+
+## 4.4 CO2 传感器
 
 文件：
 
@@ -143,19 +317,57 @@ Core/Inc/usart3.h
 
 作用：
 
-- 通过 USART3 接收 CO2 传感器数据
-- 按 6 字节协议解析
-- 输出到 `ppm`
+- USART3 接收 CO2 传感器数据
+- 6 字节数据包解析
+- 校验和验证
+- 输出 CO2 浓度
 
 引脚：
 
 ```text
 PB10 / PB11
+波特率：9600
 ```
 
-### 4.5 水量
+数据包大小：
 
-由系统根据水泵流量、灌溉时间等参数计算，输出到 `water_vol`。
+```c
+#define USART3_RX_PACKET_SIZE 6
+```
+
+主要函数：
+
+| 函数 | 作用 |
+|---|---|
+| `USART3_Rx_Start_IT()` | 启动中断接收 |
+| `CO2GetData(&ppm)` | 获取 CO2 数据 |
+
+每次读取：
+
+```c
+CO2GetData(&ppm);
+```
+
+## 4.5 水量计算
+
+水量 `water_vol` 不是单独传感器直接读数，而是根据：
+
+- 水泵流量
+- 灌溉时间
+- 土壤湿度
+- 目标补水量
+
+估算得到。
+
+相关宏：
+
+```c
+#define AREA                0.08f
+#define WATER_DEPTH         10.0f
+#define WATER_DENSITY       1.0f
+#define FLOW_RATE           1.2f
+#define MIN_WATER_VOLUME    0.1f
+```
 
 ## 5. OLED 显示模块
 
@@ -168,19 +380,13 @@ Core/Src/Display.c
 Core/Inc/Display.h
 ```
 
-作用：
-
-- OLED 初始化
-- 显示字符串、数字、中文
-- 分页面显示环境数据、参数、状态
-
-引脚：
+OLED 接口：
 
 ```text
 PB8 / PB9
 ```
 
-显示页面：
+主要显示内容：
 
 | 页面 | 内容 |
 |---|---|
@@ -189,6 +395,19 @@ PB8 / PB9
 | 页面 3 | 土壤湿度、水量、水泵状态 |
 | 页面 4 | 参数 1 |
 | 页面 5 | 参数 2 |
+
+显示函数：
+
+| 函数 | 作用 |
+|---|---|
+| `Display_Data()` | 主显示调度 |
+| `Refresh1_Data()` | 页面 1 刷新 |
+| `Refresh2_Data()` | 页面 2 刷新 |
+| `Refresh3_Data()` | 页面 3 刷新 |
+| `Refresh4_Data()` | 页面 4 刷新 |
+| `Refresh5_Data()` | 页面 5 刷新 |
+| `Bump_Display()` | 水泵状态 |
+| `LED_Display()` | LED 状态 |
 
 ## 6. LED 控制模块
 
@@ -199,27 +418,88 @@ Core/Src/LED.c
 Core/Inc/LED.h
 ```
 
-作用：
-
-- 通过 TIM3_CH2 PWM 控制 LED 亮度
-- 支持模式：
-  - `0` 关闭
-  - `1` 常亮/标准模式
-  - `2` 自动 PID 模式
-
-输出引脚：
+### 6.1 硬件
 
 ```text
 PA7 / TIM3_CH2
 ```
 
+通过 PWM 控制亮度。
+
+### 6.2 模式
+
+```c
+typedef enum {
+    MODE_OFF = 0,
+    MODE_CALIBRATION = 1,
+    MODE_AUTO_PID = 2,
+} System_Mode;
+```
+
+对应 App：
+
+```text
+0 → 关闭
+1 → 常亮
+2 → 自动
+```
+
+### 6.3 主要函数
+
+| 函数 | 作用 |
+|---|---|
+| `LED_Init()` | 初始化 PWM |
+| `LED_Set(mode)` | 设置 LED 模式 |
+| `LED_Update(current_lux)` | PID/比例控制更新 |
+| `LED_SetPWM(pwm)` | 设置 PWM |
+| `LED_Func()` | 主循环中执行 |
+| `LED_Display()` | OLED 显示 |
+
+### 6.4 自动模式
+
 自动模式逻辑：
 
-- 读取当前光照 `light`
-- 与目标光照比较
-- 计算误差
-- 用比例控制调整 PWM
-- 死区 ±20 lux，防止振荡
+1. 读取当前光照 `light`
+2. 目标光照 `target_lux`
+3. 误差：
+
+```text
+error = target_lux - current_lux
+```
+
+4. 死区：
+
+```text
+±20 lux
+```
+
+5. 比例调整：
+
+```text
+adjust = error * k_p
+```
+
+6. 限制每次调整量：
+
+```text
+±50
+```
+
+7. 限制 PWM 范围：
+
+```text
+0 ~ 1000
+```
+
+### 6.5 关键参数
+
+```c
+target_lux = 500
+k_p = 1.5f
+dead_zone = 20
+initial_pwm = 300
+PWM_MAX = 1000
+```
 
 ## 7. 水泵控制模块
 
@@ -230,43 +510,89 @@ Core/Src/bump.c
 Core/Inc/bump.h
 ```
 
-作用：
-
-- 控制水泵开关
-- 支持模式：
-  - `0` 关闭
-  - `1` 标准/校准模式
-  - `2` 自动灌溉模式
-
-输出引脚：
+### 7.1 硬件
 
 ```text
 PB1
 ```
 
-主要变量：
+通过 GPIO 控制继电器/驱动。
+
+### 7.2 模式
 
 ```c
-CurrentBump_mode
-LastBump_mode
-Bump_threhold[2]
+typedef enum {
+    Bump_OFF = 0,
+    Bump_CALIBRATION = 1,
+    Bump_AUTO = 2,
+} Bump_Mode;
 ```
 
-主要函数：
+对应 App：
+
+```text
+0 → 关闭
+1 → 开启/标准
+2 → 自动灌溉
+```
+
+### 7.3 主要函数
 
 | 函数 | 作用 |
 |---|---|
-| `BUMP_Init()` | 初始化水泵控制 |
-| `Bump_Control()` | 根据当前模式控制水泵 |
-| `Bump_Display()` | OLED 显示水泵状态 |
-| `Bump_Set(mode)` | 切换水泵模式 |
+| `BUMP_Init()` | 初始化 |
+| `Bump_Control()` | 根据模式控制水泵 |
+| `Bump_Display()` | OLED 显示 |
+| `Bump_Set(mode)` | 切换模式 |
+| `Irrigation_Control()` | 自动灌溉逻辑 |
 
-自动灌溉逻辑：
+### 7.4 自动灌溉
 
-- 根据土壤湿度阈值 `Bump_threhold[0]` 和 `Bump_threhold[1]`
-- 低于下限进行灌溉
-- 高于上限停止灌溉
-- 还包含高压脉冲灌溉逻辑
+阈值：
+
+```c
+Bump_threhold[0] // 干旱下限
+Bump_threhold[1] // 湿润上限
+```
+
+默认：
+
+```c
+HUMI_THRESHOLD_LOW  30
+HUMI_THRESHOLD_HIGH 75
+```
+
+逻辑：
+
+- 土壤湿度低于下限 → 开始灌溉
+- 土壤湿度高于上限 → 停止灌溉
+- 中间区域 → 保持当前状态
+
+### 7.5 水量估算
+
+参数：
+
+```c
+AREA = 0.08f
+WATER_DEPTH = 10.0f
+FLOW_RATE = 1.2f
+MIN_WATER_VOLUME = 0.1f
+```
+
+可根据面积、目标水深和流量估算灌溉时间。
+
+### 7.6 高压脉冲灌溉
+
+代码中还有：
+
+- `hp_running`
+- `hp_ms_total`
+- `hp_ms_count`
+- `hp_is_on`
+- `HP_ON_MS`
+- `HP_OFF_MS`
+
+用于间歇式/高压脉冲灌溉。
 
 ## 8. 按键模块
 
@@ -281,17 +607,25 @@ Core/Inc/Key.h
 
 | 按键 | 引脚 | 作用 |
 |---|---|---|
-| KEY1 | PA4 | 页面切换 |
-| KEY2 | PA5 | 页面切换 |
-| KEY3 | PB7 | LED 模式 |
-| KEY4 | PA6 | 水泵模式 |
+| 按键 1 | PA4 | 页面切换 |
+| 按键 2 | PA5 | 页面切换 |
+| 按键 3 | PB7 | LED 模式 |
+| 按键 4 | PA6 | 水泵模式 |
 
 支持：
 
 - 短按
 - 长按
 - 参数增减
-- 页面切换
+
+参数步进：
+
+```c
+LDR_STEP 100
+CO2_STEP 100
+TEMP_STEP 2
+BUMP_STEP 2
+```
 
 ## 9. 蜂鸣器与异常报警
 
@@ -302,11 +636,6 @@ Core/Src/beep.c
 Core/Inc/beep.h
 ```
 
-作用：
-
-- 异常状态报警
-- 蜂鸣器输出
-
 引脚：
 
 ```text
@@ -315,11 +644,32 @@ PB12
 
 异常类型：
 
+```c
+typedef enum {
+    NONE = 0,
+    BRIGHT,
+    DARK,
+    DAMP,
+    DROUGHT,
+    HIGHCO2
+} Abnormal;
+```
+
+对应：
+
 - 光照过亮
 - 光照过暗
 - 土壤过湿
 - 土壤干旱
 - CO2 过高
+
+主要函数：
+
+| 函数 | 作用 |
+|---|---|
+| `IS_Normal()` | 判断异常 |
+| `Handler()` | 报警处理 |
+| `Beep_Set(status)` | 蜂鸣器开关 |
 
 ## 10. ESP8266 通信模块
 
@@ -330,28 +680,50 @@ onenet/device/src/esp8266.c
 onenet/device/inc/esp8266.h
 ```
 
-作用：
+### 10.1 作用
 
-- 通过 AT 指令初始化 ESP8266
-- 连接手机热点
-- 建立 TCP 连接
-- 发送和接收 MQTT 数据
+- AT 指令控制 ESP8266
+- 连接 2.4GHz WiFi
+- TCP 连接 OneNET MQTT
+- 发送 MQTT 数据
+- 接收 OneNET 下发数据
 
-主要函数：
+### 10.2 串口
+
+```text
+USART2
+PA2 / PA3
+115200
+```
+
+### 10.3 初始化步骤
+
+```c
+AT
+AT+CWMODE=1
+AT+CWDHCP=1,1
+AT+CWJAP="SSID","PASSWORD"
+AT+CIPSTART="TCP","mqtts.heclouds.com",1883
+```
+
+### 10.4 主要函数
 
 | 函数 | 作用 |
 |---|---|
-| `ESP8266_Init()` | ESP8266 初始化 |
-| `ESP8266_SendCmd()` | 发送 AT 指令并等待响应 |
-| `ESP8266_SendData()` | 发送数据 |
-| `ESP8266_GetIPD()` | 读取云端下发数据 |
+| `ESP8266_Init()` | 初始化 WiFi |
 | `ESP8266_Clear()` | 清空接收缓存 |
+| `ESP8266_WaitRecive()` | 判断接收完成 |
+| `ESP8266_SendCmd()` | 发送 AT 指令并检查响应 |
+| `ESP8266_SendData()` | 发送 MQTT 数据 |
+| `ESP8266_GetIPD()` | 读取云端下发数据 |
 
-关键要求：
+### 10.5 关键注意
 
-- 手机热点必须是 2.4GHz
-- 加密方式建议 WPA2
-- ESP8266 供电要足够，建议独立 3.3V 电源
+- 热点必须 2.4GHz
+- WPA2 最稳
+- 不支持的 5GHz 对 ESP8266 等于不存在
+- 供电不足会导致 CWJAP 阶段掉电复位
+- 串口接收首字节丢失会导致 AT 响应匹配失败
 
 ## 11. OneNET 通信模块
 
@@ -362,31 +734,49 @@ onenet/onenet/src/onenet.c
 onenet/onenet/inc/onenet.h
 ```
 
-作用：
+### 11.1 产品与设备
 
-- OneNET 设备鉴权
-- MQTT 连接
-- 订阅属性 set 主题
-- 上报物模型属性
-- 处理云端属性下发
-- 回复 set_reply
-
-主要流程：
-
-### 11.1 设备连接
+工程中定义：
 
 ```c
-OneNet_DevLink()
+#define PROID       "OCuh518nh5"
+#define DEVICE_NAME "SA1"
+#define ACCESS_KEY  "设备级密钥"
 ```
 
-连接参数：
+MQTT 地址：
 
-- 产品 ID：`PROID`
-- 设备名：`DEVICE_NAME`
-- 设备密钥：`ACCESS_KEY`
-- MQTT 地址：`mqtts.heclouds.com:1883`
+```text
+mqtts.heclouds.com:1883
+```
 
-### 11.2 属性上报
+### 11.2 鉴权
+
+旧版 MQTT 鉴权版本：
+
+```text
+2018-10-31
+```
+
+资源格式：
+
+```text
+products/{PROID}/devices/{DEVICE_NAME}
+```
+
+### 11.3 主要函数
+
+| 函数 | 作用 |
+|---|---|
+| `OneNET_Authorization()` | 生成 MQTT 鉴权 |
+| `OneNet_DevLink()` | 连接 OneNET |
+| `OneNet_FillBuf()` | 组装属性上报 JSON |
+| `OneNet_SendData()` | 上传属性 |
+| `OneNET_Publish()` | 发布 MQTT 消息 |
+| `OneNET_Subscribe()` | 订阅 set 主题 |
+| `OneNet_RevPro()` | 处理云端下发 |
+
+### 11.4 属性上报
 
 主题：
 
@@ -394,7 +784,7 @@ OneNet_DevLink()
 $sys/{PROID}/{DEVICE_NAME}/thing/property/post
 ```
 
-报文结构：
+报文：
 
 ```json
 {
@@ -407,19 +797,25 @@ $sys/{PROID}/{DEVICE_NAME}/thing/property/post
     "ppm": { "value": 350 },
     "water_vol": { "value": 0.0 },
     "led": { "value": 2 },
-    "bump": { "value": 2 }
+    "bump": { "value": 2 },
+    "CO2threhold": { "value": 2000 },
+    "droughtthrehold": { "value": 30 },
+    "moistthrehold": { "value": 75 },
+    "tempthrehold": { "value": 30 },
+    "moist": { "value": 97 }
   }
 }
 ```
 
 注意：
 
-- 必须包含 `version`
-- 缺少 `version` 时，OneNET 可能不把数据当成物模型属性
+- 必须有 `version`
+- 必须是 OneJSON 结构
+- OneNET 才会把它当成物模型属性
 
-### 11.3 属性下发
+### 11.5 属性下发
 
-订阅主题：
+订阅：
 
 ```text
 $sys/{PROID}/{DEVICE_NAME}/thing/property/set
@@ -427,8 +823,34 @@ $sys/{PROID}/{DEVICE_NAME}/thing/property/set
 
 收到：
 
+```json
+{
+  "id": "xxx",
+  "version": "1.0",
+  "params": {
+    "led": 2
+  }
+}
+```
+
+或：
+
+```json
+{
+  "id": "xxx",
+  "version": "1.0",
+  "params": {
+    "bump": 2
+  }
+}
+```
+
+处理：
+
 - `led` → `LED_Set()`
 - `bump` → `Bump_Set()`
+
+### 11.6 set_reply
 
 回复主题：
 
@@ -439,35 +861,244 @@ $sys/{PROID}/{DEVICE_NAME}/thing/property/set_reply
 回复：
 
 ```json
-{"id":"...","code":200,"msg":"success"}
+{"id":"xxx","code":200,"msg":"success"}
 ```
 
-## 12. 当前 STM32 端完成的功能
+## 12. MQTT 协议层
 
-- [x] DHT11 温湿度采集
-- [x] 土壤湿度采集
-- [x] 光照强度采集
-- [x] CO2 采集
-- [x] 水量计算
+文件：
+
+```text
+onenet/MQTT/MqttKit.c
+onenet/MQTT/MqttKit.h
+```
+
+作用：
+
+- MQTT 连接报文
+- MQTT 发布报文
+- MQTT 订阅报文
+- MQTT 解包
+- QoS 处理
+
+主要函数：
+
+| 函数 | 作用 |
+|---|---|
+| `MQTT_PacketConnect()` | 连接报文 |
+| `MQTT_PacketPublish()` | 发布报文 |
+| `MQTT_PacketSubscribe()` | 订阅报文 |
+| `MQTT_PacketSaveData()` | 保存属性上报数据 |
+| `MQTT_UnPacketRecv()` | 判断报文类型 |
+| `MQTT_UnPacketPublish()` | 解析发布报文 |
+| `MQTT_UnPacketSubscribe()` | 解析订阅响应 |
+
+## 13. 调试串口
+
+文件：
+
+```text
+Core/Src/myusart.c
+Core/Inc/myusart.h
+```
+
+USART1：
+
+```text
+PA9 / PA10
+115200
+```
+
+用于：
+
+- 打印 ESP8266 AT 响应
+- 打印调试信息
+- 观察 CWJAP 返回值
+
+常见返回：
+
+| 返回 | 含义 |
+|---|---|
+| `+CWJAP:1` | 找不到热点 |
+| `+CWJAP:2` | 密码错误 |
+| `+CWJAP:3` | 连接超时 |
+| `+CWJAP:4` | 加密方式不支持 |
+
+## 14. OneNET 属性模型对照表
+
+| identifier | 中文 | 类型 | 读写 | 单位 | 说明 |
+|---|---|---|---|---|---|
+| `temp` | 空气温度 | int32 | 只读 | ℃ | DHT11 |
+| `humi` | 空气湿度 | int32 | 只读 | % | DHT11 |
+| `light` | 光照强度 | int32 | 只读 | lx | 光敏 |
+| `ppm` | CO2 浓度 | int32 | 只读 | ppm | USART3 |
+| `moist` | 土壤湿度 | int32 | 只读 | % | ADC |
+| `water_vol` | 水量 | float | 只读 | 无 | 估算 |
+| `led` | LED 模式 | enum | 读写 | 无 | 0/1/2 |
+| `bump` | 水泵模式 | enum | 读写 | 无 | 0/1/2 |
+| `CO2threhold` | CO2 阈值 | int32 | 读写 | ppm | 参数 |
+| `droughtthrehold` | 干旱阈值 | int32 | 读写 | % | 参数 |
+| `moistthrehold` | 湿润阈值 | int32 | 读写 | % | 参数 |
+| `tempthrehold` | 温度阈值 | int32 | 读写 | ℃ | 参数 |
+
+## 15. 控制链路
+
+### 15.1 LED
+
+```text
+App 下发 led=0/1/2
+  ↓
+OneNET set 主题
+  ↓
+OneNet_RevPro()
+  ↓
+LED_Set(mode)
+  ↓
+LED_Func()
+  ↓
+LED_SetPWM()
+```
+
+### 15.2 水泵
+
+```text
+App 下发 bump=0/1/2
+  ↓
+OneNET set 主题
+  ↓
+OneNet_RevPro()
+  ↓
+Bump_Set(mode)
+  ↓
+Bump_Control()
+  ↓
+BUMP_ON / BUMP_OFF
+```
+
+## 16. 常见问题与解决
+
+### 16.1 OLED 卡在 CWJAP
+
+检查：
+
+- 热点是否为 2.4GHz
+- 密码是否正确
+- ESP8266 供电是否足够
+- AT 指令是否收到响应
+
+### 16.2 AT 响应丢失
+
+检查：
+
+- `main.c` 是否使用 `HAL_UART_Receive_IT(&huart2, &received_data, 1)`
+- `myusart.c` 是否把 `received_data` 追加到 `esp8266_buf`
+- `esp8266_cnt` 类型是否为 `unsigned short`
+
+### 16.3 物模型没有值
+
+检查：
+
+- 属性上报 JSON 是否有 `version`
+- 主题是否是 `thing/property/post`
+- OneNET 物模型是否有对应属性
+
+### 16.4 水泵控制无效
+
+检查：
+
+- `onenet.c` 的 `bump` 分支是否调用 `Bump_Set()`
+- `bump.h` 是否声明 `Bump_Set()`
+- STM32 是否收到 set 消息
+- 是否发送 set_reply
+
+### 16.5 断电后 App 仍在线
+
+检查：
+
+- App 是否使用属性 `time` 判断在线
+- 是否以 30 秒作为离线阈值
+
+## 17. 如何扩展新功能
+
+### 17.1 增加新传感器
+
+1. 编写传感器驱动
+2. 在主循环读取
+3. 在 `OneNet_FillBuf()` 增加属性
+4. OneNET 物模型增加属性
+5. App `PropertyHelper` 增加中文名和单位
+6. 详情页增加卡片
+
+### 17.2 增加新控制
+
+1. OneNET 物模型增加可写属性
+2. `OneNet_RevPro()` 增加解析
+3. 编写控制函数
+4. 发送 set_reply
+5. 下一次上报新状态
+6. App 增加模式按钮
+
+### 17.3 增加参数保存
+
+可以使用：
+
+- STM32 内部 Flash
+- 外部 EEPROM
+- OneNET 云端下发后恢复
+
+## 18. 当前 STM32 端完整功能清单
+
+- [x] DHT11 温湿度
+- [x] 土壤湿度
+- [x] 光照强度
+- [x] CO2 浓度
+- [x] 水量估算
 - [x] OLED 多页面显示
-- [x] 按键控制
-- [x] LED PWM 控制
-- [x] LED 自动 PID 模式
-- [x] 水泵手动/自动控制
-- [x] ESP8266 WiFi 连接
-- [x] OneNET MQTT 连接
-- [x] OneNET 物模型属性上报
-- [x] OneNET 属性下发
+- [x] 4 个按键
+- [x] LED PWM
+- [x] LED 自动 PID
+- [x] 水泵手动模式
+- [x] 水泵自动灌溉
+- [x] 蜂鸣器报警
+- [x] ESP8266 WiFi
+- [x] OneNET MQTT
+- [x] 物模型属性上报
+- [x] 属性下发
 - [x] LED 云端控制
 - [x] 水泵云端控制
-- [x] set_reply 回复
+- [x] set_reply
 
-## 13. 后续可优化方向
+## 19. 后续优化方向
 
-- MQTT 断线自动重连
-- OneNET 属性下发回复更细分
-- 传感器数据滤波
-- 参数保存到 Flash
-- 增加历史数据记录
+- MQTT 断线重连
+- 参数掉电保存
+- 传感器滤波
+- 更精细的 PID
+- 任务化/FreeRTOS
 - 代码注释整理
-- 引入 FreeRTOS 做任务划分
+- 多设备支持
+- OTA 升级
+
+## 20. 总结
+
+STM32 端核心可以概括为：
+
+```text
+传感器采集
+  ↓
+本地控制与显示
+  ↓
+OneNET_FillBuf 组装 OneJSON
+  ↓
+MQTT 属性上报
+  ↓
+OneNet_RevPro 处理下发
+  ↓
+LED_Set / Bump_Set
+  ↓
+执行器动作
+  ↓
+下一次属性上报
+```
+
+理解这条链路，就理解了整个 STM32 端项目的核心。
