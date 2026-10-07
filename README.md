@@ -1,4 +1,6 @@
 # STM32-IOT-Harmony
+> 更新日志：[CHANGELOG.md](CHANGELOG.md)
+
 STM32 + ESP8266 + OneNET + HarmonyOS 智慧环境监控系统，支持数据采集、云端上报、实时监控与双向控制。
 # 基于 STM32 + ESP8266 + OneNET + HarmonyOS 的智慧环境监控系统
 
