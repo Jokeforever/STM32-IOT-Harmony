@@ -9,13 +9,15 @@ volatile float time_min  = 0;
 volatile uint32_t time_ms = 0;
 uint16_t Bump_threhold[2] ;
 
-Bump_Mode CurrentBump_mode = Bump_AUTO;
-Bump_Mode LastBump_mode = Bump_AUTO;
+Bump_Mode CurrentBump_mode = Bump_OFF;
+Bump_Mode LastBump_mode = Bump_OFF;
 
 void BUMP_Init(void)
 {
 
 	BUMP_OFF;
+	CurrentBump_mode = Bump_OFF;
+	LastBump_mode = Bump_OFF;
 	Bump_threhold[0] = HUMI_THRESHOLD_LOW;
 	Bump_threhold[1] = HUMI_THRESHOLD_HIGH;
 }

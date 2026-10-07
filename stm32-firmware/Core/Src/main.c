@@ -386,7 +386,7 @@ static void Config_SetDefault(void)
     g_device_config.size = (uint16_t)sizeof(DeviceConfig);
     g_device_config.sequence = 0U;
     g_device_config.led_mode = (uint8_t)MODE_AUTO_PID;
-    g_device_config.bump_mode = (uint8_t)Bump_AUTO;
+    g_device_config.bump_mode = (uint8_t)Bump_OFF;
     g_device_config.led_manual_pwm = 50U;
     g_device_config.temp_threshold = (uint8_t)TEMP_THREHOLD;
     g_device_config.co2_threshold = CO2_THREHOLD;
@@ -408,7 +408,7 @@ static void Config_Sanitize(DeviceConfig *config)
     }
     if (config->bump_mode > (uint8_t)Bump_AUTO)
     {
-        config->bump_mode = (uint8_t)Bump_AUTO;
+        config->bump_mode = (uint8_t)Bump_OFF;
     }
     if (config->led_manual_pwm > 100U)
     {
