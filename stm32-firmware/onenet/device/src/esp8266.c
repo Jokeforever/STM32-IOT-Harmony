@@ -34,6 +34,8 @@
 #include <string.h>
 #include <stdio.h>
 
+extern void Watchdog_Feed(void);
+
 
 #define ESP8266_WIFI_INFO		"AT+CWJAP=\"YOUR_WIFI_SSID\",\"YOUR_WIFI_PASSWORD\"\r\n"
 
@@ -141,6 +143,7 @@ _Bool ESP8266_SendCmd(char *cmd, char *res)
 			}
 		}
 		
+		Watchdog_Feed();
 		HAL_Delay(10);
 	}
 	
@@ -205,17 +208,20 @@ _Bool ESP8266_SendCmd(char *cmd, char *res)
 //
 //	说明：		
 //==========================================================
-void ESP8266_SendData(unsigned char *data, unsigned short len)
+_Bool ESP8266_SendData(unsigned char *data, unsigned short len)
 {
 
 	char cmdBuf[32];
 	
-	ESP8266_Clear();								//清空接收缓存
-	sprintf(cmdBuf, "AT+CIPSEND=%d\r\n", len);		//发送命令
-	if(!ESP8266_SendCmd(cmdBuf, ">"))				//收到‘>’时可以发送数据
+	ESP8266_Clear();
+	snprintf(cmdBuf, sizeof(cmdBuf), "AT+CIPSEND=%d\r\n", len);
+	if(ESP8266_SendCmd(cmdBuf, ">") == 0)
 	{
-		Usart_SendString(&huart2, data, len);		//发送设备连接请求数据
+		Usart_SendString(&huart2, data, len);
+		return 0;
 	}
+
+	return 1;
 
 }
 
@@ -259,6 +265,7 @@ unsigned char *ESP8266_GetIPD(unsigned short timeOut)
 			}
 		}
 		
+		Watchdog_Feed();
 		HAL_Delay(5);													//延时等待
 	} while(timeOut--);
 	

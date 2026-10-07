@@ -15,7 +15,7 @@ void ESP8266_Clear(void);
 
 _Bool ESP8266_SendCmd(char *cmd, char *res);
 
-void ESP8266_SendData(unsigned char *data, unsigned short len);
+_Bool ESP8266_SendData(unsigned char *data, unsigned short len);
 
 unsigned char *ESP8266_GetIPD(unsigned short timeOut);
 

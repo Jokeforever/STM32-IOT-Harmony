@@ -61,6 +61,7 @@
 /* USER CODE BEGIN PD */
 #define ESP8266_ONENET_INFO		"AT+CIPSTART=\"TCP\",\"mqtts.heclouds.com\",1883\r\n"
 #define ONENET_UPLOAD_INTERVAL	5000	// 5s
+#define USE_WATCHDOG			1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -90,6 +91,8 @@ volatile DisplayScreen CurrentScreen = DISPLAY_NONE; // 当前显示界面
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void Hardware_Init(void);
+void Watchdog_Init(void);
+void Watchdog_Feed(void);
 
 
 /* USER CODE END PFP */
@@ -138,6 +141,7 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 	uint32_t last_upload_tick = 0;
+	uint32_t last_reconnect_tick = 0;
 	unsigned char *dataPtr = NULL;
 	uint8_t net_retry = 0;
 	uint8_t login_retry = 0;
@@ -167,6 +171,7 @@ int main(void)
 		delay_ms(500);
 	
 	OneNET_Subscribe();
+	Watchdog_Init();
 	OLED_Clear();
 	CurrentScreen = DISPLAY_NONE;
 
@@ -174,13 +179,29 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+	while (1)
+	{
+		Watchdog_Feed();
+
+		/* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 		
 		Key_Func();
+
+		if(!OneNet_IsConnected() &&
+		   (HAL_GetTick() - last_reconnect_tick >= 10000))
+		{
+			last_reconnect_tick = HAL_GetTick();
+			if(ESP8266_SendCmd(ESP8266_ONENET_INFO, "CONNECT") == 0)
+			{
+				if(OneNet_DevLink() == 0)
+				{
+					OneNET_Subscribe();
+				}
+			}
+		}
+
 		uint32_t now_tick = HAL_GetTick();
 		if((now_tick - last_upload_tick) >= ONENET_UPLOAD_INTERVAL)	//发送间隔5s
 		{
@@ -283,6 +304,31 @@ void Hardware_Init(void)
 		delay_ms(1000);
 		OLED_Clear();
 	
+}
+
+static volatile uint8_t watchdog_enabled = 0;
+
+void Watchdog_Init(void)
+{
+#if USE_WATCHDOG
+	IWDG->KR = 0xCCCC;
+	IWDG->KR = 0x5555;
+	IWDG->PR = 6;      // LSI / 256
+	IWDG->RLR = 1250;  // about 8s at 40kHz LSI
+	while (IWDG->SR) {}
+	IWDG->KR = 0xAAAA;
+	watchdog_enabled = 1;
+#endif
+}
+
+void Watchdog_Feed(void)
+{
+#if USE_WATCHDOG
+	if(watchdog_enabled)
+	{
+		IWDG->KR = 0xAAAA;
+	}
+#endif
 }
 
 

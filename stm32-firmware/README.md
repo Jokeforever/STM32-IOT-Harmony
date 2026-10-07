@@ -132,6 +132,10 @@ ESP8266 要求：
 - 主程序改为按 `HAL_GetTick()` 每 5 秒上报
 - DHT11、TCP、OneNET 登录增加有限重试
 - `OneNet_FillBuf` 改为带边界检查的 `snprintf`
+- `ESP8266_SendData` 和 `OneNet_SendData` 增加发送状态返回
+- 主循环增加 TCP/MQTT 断线重连检查
+- 增加 IWDG 看门狗，超时约 8 秒
+- AT 等待和网络等待循环中会喂狗，避免长等待误复位
 
 ## 7. 当前注意事项
 
@@ -139,3 +143,4 @@ ESP8266 要求：
 - 第一次编译时 Keil 会自动生成对象文件和输出目录
 - 如果使用了不同的 WiFi，请只使用 2.4GHz
 - 如果设备密钥泄露，请在 OneNET 控制台重新生成
+- 当前自动重连主要针对 TCP/MQTT；ESP8266 通常会自动重连上次保存的 AP

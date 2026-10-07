@@ -9,7 +9,9 @@ _Bool OneNET_RegisterDevice(void);
 
 _Bool OneNet_DevLink(void);
 
-void OneNet_SendData(void);
+_Bool OneNet_IsConnected(void);
+
+_Bool OneNet_SendData(void);
 
 void OneNET_Subscribe(void);
 

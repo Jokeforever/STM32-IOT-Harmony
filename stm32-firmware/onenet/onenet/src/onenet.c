@@ -64,6 +64,8 @@ char devid[16];
 
 char key[48];
 
+static _Bool one_net_connected = 0;
+
 
 extern unsigned char esp8266_buf[512];
 
@@ -460,6 +462,7 @@ _Bool OneNet_DevLink(void)
 //	else
 ////		UsartPrintf(USART_DEBUG, "WARN:	MQTT_PacketConnect Failed\r\n");
 	
+	one_net_connected = (status == 0);
 	return status;
 	
 }
@@ -558,37 +561,43 @@ unsigned short OneNet_FillBuf(char *buf)
 //
 //	说明：		
 //==========================================================
-void OneNet_SendData(void)
+_Bool OneNet_SendData(void)
 {
 	
-	MQTT_PACKET_STRUCTURE mqttPacket = {NULL, 0, 0, 0};												//协议包
-	
+	MQTT_PACKET_STRUCTURE mqttPacket = {NULL, 0, 0, 0};
 	char buf[ONENET_JSON_BUF_SIZE];
-	
 	short body_len = 0, i = 0;
-	
-	memset(buf, 0, sizeof(buf));
-	
-	body_len = OneNet_FillBuf(buf);																	//获取当前需要发送的数据流的总长度
-	
-	if(body_len)
-	{
-		if(MQTT_PacketSaveData(PROID, DEVICE_NAME, body_len, NULL, &mqttPacket) == 0)				//封包
-		{
-			for(; i < body_len; i++)
-				mqttPacket._data[mqttPacket._len++] = buf[i];
-			
-			ESP8266_SendData(mqttPacket._data, mqttPacket._len);									//上传数据到平台
-//			UsartPrintf(USART_DEBUG, "Send %d Bytes\r\n", mqttPacket._len);
-			
-			MQTT_DeleteBuffer(&mqttPacket);															//删包
-		}
-		else
-		{;}
-	}
-	
-}
 
+	memset(buf, 0, sizeof(buf));
+
+	body_len = OneNet_FillBuf(buf);
+	if(body_len <= 0)
+	{
+		one_net_connected = 0;
+		return 1;
+	}
+
+	if(MQTT_PacketSaveData(PROID, DEVICE_NAME, body_len, NULL, &mqttPacket) != 0)
+	{
+		one_net_connected = 0;
+		return 1;
+	}
+
+	for(; i < body_len; i++)
+	{
+		mqttPacket._data[mqttPacket._len++] = buf[i];
+	}
+
+	if(ESP8266_SendData(mqttPacket._data, mqttPacket._len) != 0)
+	{
+		MQTT_DeleteBuffer(&mqttPacket);
+		one_net_connected = 0;
+		return 1;
+	}
+
+	MQTT_DeleteBuffer(&mqttPacket);
+	return 0;
+}
 //==========================================================
 //	函数名称：	OneNET_Publish
 //
@@ -610,7 +619,10 @@ void OneNET_Publish(const char *topic, const char *msg)
 	
 	if(MQTT_PacketPublish(MQTT_PUBLISH_ID, topic, msg, strlen(msg), MQTT_QOS_LEVEL0, 0, 1, &mqtt_packet) == 0)
 	{
-		ESP8266_SendData(mqtt_packet._data, mqtt_packet._len);					//向平台发送订阅请求
+		if(ESP8266_SendData(mqtt_packet._data, mqtt_packet._len) != 0)
+		{
+			one_net_connected = 0;
+		}
 		
 		MQTT_DeleteBuffer(&mqtt_packet);										//删包
 	}
@@ -642,12 +654,20 @@ void OneNET_Subscribe(void)
 	
 	if(MQTT_PacketSubscribe(MQTT_SUBSCRIBE_ID, MQTT_QOS_LEVEL0, &topic, 1, &mqtt_packet) == 0)
 	{
-		ESP8266_SendData(mqtt_packet._data, mqtt_packet._len);					//向平台发送订阅请求
+		if(ESP8266_SendData(mqtt_packet._data, mqtt_packet._len) != 0)
+		{
+			one_net_connected = 0;
+		}
 		
 		MQTT_DeleteBuffer(&mqtt_packet);										//删包
 	}
 
 
+}
+
+_Bool OneNet_IsConnected(void)
+{
+	return one_net_connected;
 }
 
 //==========================================================
