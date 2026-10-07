@@ -28,6 +28,14 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+#define EEPROM_24C02_I2C_ADDR      0xA0U
+#define EEPROM_24C02_PAGE_SIZE     8U
+#define EEPROM_24C02_SIZE          256U
+
+uint8_t EEPROM24C02_Read(uint8_t mem_addr, uint8_t *buf, uint16_t len);
+uint8_t EEPROM24C02_Write(uint8_t mem_addr, const uint8_t *buf, uint16_t len);
+uint8_t EEPROM24C02_IsReady(void);
+
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */

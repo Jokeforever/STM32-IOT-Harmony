@@ -56,6 +56,73 @@ void MX_I2C1_Init(void)
 
 }
 
+uint8_t EEPROM24C02_IsReady(void)
+{
+    return (HAL_I2C_IsDeviceReady(&hi2c1, EEPROM_24C02_I2C_ADDR, 3U, 10U) == HAL_OK) ? 1U : 0U;
+}
+
+uint8_t EEPROM24C02_Read(uint8_t mem_addr, uint8_t *buf, uint16_t len)
+{
+    if ((buf == NULL) || (len == 0U) ||
+        ((uint32_t)mem_addr + (uint32_t)len > EEPROM_24C02_SIZE))
+    {
+        return 0U;
+    }
+
+    return (HAL_I2C_Mem_Read(&hi2c1,
+                             EEPROM_24C02_I2C_ADDR,
+                             mem_addr,
+                             I2C_MEMADD_SIZE_8BIT,
+                             buf,
+                             len,
+                             100U) == HAL_OK) ? 1U : 0U;
+}
+
+uint8_t EEPROM24C02_Write(uint8_t mem_addr, const uint8_t *buf, uint16_t len)
+{
+    uint16_t addr = mem_addr;
+    uint32_t start_tick;
+
+    if ((buf == NULL) || (len == 0U) ||
+        ((uint32_t)mem_addr + (uint32_t)len > EEPROM_24C02_SIZE))
+    {
+        return 0U;
+    }
+
+    while (len > 0U)
+    {
+        uint16_t page_space = (uint16_t)(EEPROM_24C02_PAGE_SIZE - (addr % EEPROM_24C02_PAGE_SIZE));
+        uint16_t chunk = (len < page_space) ? len : page_space;
+
+        if (HAL_I2C_Mem_Write(&hi2c1,
+                              EEPROM_24C02_I2C_ADDR,
+                              (uint8_t)addr,
+                              I2C_MEMADD_SIZE_8BIT,
+                              (uint8_t *)buf,
+                              chunk,
+                              100U) != HAL_OK)
+        {
+            return 0U;
+        }
+
+        start_tick = HAL_GetTick();
+        while (EEPROM24C02_IsReady() == 0U)
+        {
+            if ((HAL_GetTick() - start_tick) > 50U)
+            {
+                return 0U;
+            }
+            HAL_Delay(1U);
+        }
+
+        addr += chunk;
+        buf += chunk;
+        len -= chunk;
+    }
+
+    return 1U;
+}
+
 void HAL_I2C_MspInit(I2C_HandleTypeDef* i2cHandle)
 {
 

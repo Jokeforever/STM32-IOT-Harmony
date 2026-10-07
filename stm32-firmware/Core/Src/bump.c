@@ -174,5 +174,6 @@ void Bump_Set(int mode )
 	{
 		CurrentBump_mode = Bump_AUTO;
 	}
+	Config_MarkDirty();
 }
 

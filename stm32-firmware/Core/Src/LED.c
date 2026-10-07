@@ -28,6 +28,7 @@ void LED_Set( int mode)
 	else if(mode == LED_OFF)
 	current_mode = MODE_OFF;
 	
+	Config_MarkDirty();
 }
 
 

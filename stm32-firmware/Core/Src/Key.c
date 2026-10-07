@@ -144,6 +144,10 @@ void Key_Func(void)
 				LED_Manu_PWM = 0;
 			}
 		}
+		if((CurrentScreen == DISPLAY_SCREEN2) && (current_mode == MODE_CALIBRATION))
+		{
+			Config_MarkDirty();
+		}
 		Keys[1].ClickFlag = 0;
 		Keys[1].State = 0;
 	}
@@ -224,6 +228,10 @@ void Key_Func(void)
       Mode_Switch();  
 		}
 		}
+		if((CurrentScreen == DISPLAY_SCREEN4) || (CurrentScreen == DISPLAY_SCREEN5))
+		{
+			Config_MarkDirty();
+		}
 		Keys[2].ClickFlag = 0;
 		Keys[2].LongClickFlag = 0;
 		Keys[2].State = 0;
@@ -303,6 +311,10 @@ void Key_Func(void)
 				CurrentBump_mode = (CurrentBump_mode + 1) % 3; 
 		}
 	}
+		if((CurrentScreen == DISPLAY_SCREEN4) || (CurrentScreen == DISPLAY_SCREEN5))
+		{
+			Config_MarkDirty();
+		}
 		Keys[3].ClickFlag = 0;
 		Keys[3].LongClickFlag = 0;
 		Keys[3].State = 0;

@@ -52,6 +52,36 @@ extern "C" {
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
+#define CONFIG_MAGIC       0x43464731U
+#define CONFIG_VERSION     1U
+#define CONFIG_SLOT_A      0x00U
+#define CONFIG_SLOT_B      0x40U
+
+typedef struct
+{
+    uint32_t magic;
+    uint16_t version;
+    uint16_t size;
+    uint16_t sequence;
+    uint8_t led_mode;
+    uint8_t bump_mode;
+    uint8_t led_manual_pwm;
+    uint8_t temp_threshold;
+    uint16_t co2_threshold;
+    uint16_t ldr_low;
+    uint16_t ldr_high;
+    uint16_t soil_low;
+    uint16_t soil_high;
+    uint16_t soil_wet_adc;
+    uint16_t soil_dry_adc;
+    uint32_t crc32;
+} DeviceConfig;
+
+void Config_Load(void);
+uint8_t Config_Save(void);
+void Config_MarkDirty(void);
+void Config_Process(void);
+
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
