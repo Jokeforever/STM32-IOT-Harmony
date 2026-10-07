@@ -37,8 +37,8 @@
 //#define    ADC_IRQHandler                ADC3_IRQHandler
 
 void LDR_Init(void);
-uint16_t LDR_Average_Data(void);
-uint16_t LDR_LuxData(uint16_t *light);
+uint8_t LDR_Average_Data(uint16_t *average);
+uint8_t LDR_LuxData(uint16_t *light);
 
 #endif /* __ADC_H */
 

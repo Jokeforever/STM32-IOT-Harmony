@@ -129,13 +129,16 @@ void USART3_Rx_Start_IT(void)
 
 
 
-void CO2GetData(uint16_t *data)
+uint8_t CO2GetData(uint16_t *data)
 {
-	if (Usart3_RxFlag == 1)
-	{
-		Usart3_RxFlag = 0;
-		*data = Usart3_RxPacket[1] * 256 + Usart3_RxPacket[2];
-	}
+    if ((data == NULL) || (Usart3_RxFlag == 0U))
+    {
+        return 0U;
+    }
+
+    Usart3_RxFlag = 0U;
+    *data = (uint16_t)(((uint16_t)Usart3_RxPacket[1] << 8) | Usart3_RxPacket[2]);
+    return 1U;
 }
 
 //void CO2GetData(uint16_t *data)

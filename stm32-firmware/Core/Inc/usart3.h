@@ -23,7 +23,7 @@ extern volatile uint8_t Usart3_RxFlag;
 void USART3_Rx_Start_IT(void);  // 启动中断接收
 
 
-void CO2GetData(uint16_t *data);
+uint8_t CO2GetData(uint16_t *data);
 
 #endif
 

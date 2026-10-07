@@ -75,25 +75,37 @@ uint8_t DHT11_Read_Byte(void)
 //temp:�¶�ֵ(��Χ:0~50��)
 //humi:ʪ��ֵ(��Χ:20%~90%)
 //����ֵ��0,����;1,��ȡʧ��
-uint8_t DHT11_Read_Data(uint8_t *temp,uint8_t *humi)    
-{        
- 	uint8_t buf[5];
-	uint8_t i;
-	DHT11_Rst();
-	if(DHT11_Check()==0)
-	{
-		for(i=0;i<5;i++)//��ȡ40λ����
-		{
-			buf[i]=DHT11_Read_Byte();
-		}
-		if((buf[0]+buf[1]+buf[2]+buf[3])==buf[4])
-		{
-			*humi=buf[0];
-			*temp=buf[2];
-		}
-	}
-	else return 1;
-	return 0;	    
+/* return: 0=OK, 1=no response, 2=checksum error */
+uint8_t DHT11_Read_Data(uint8_t *temp,uint8_t *humi)
+{
+    uint8_t buf[5];
+    uint8_t i;
+
+    if ((temp == NULL) || (humi == NULL))
+    {
+        return DHT11_ERROR_NO_RESPONSE;
+    }
+
+    DHT11_Rst();
+    if (DHT11_Check() != 0U)
+    {
+        return DHT11_ERROR_NO_RESPONSE;
+    }
+
+    for (i = 0U; i < 5U; i++)
+    {
+        buf[i] = DHT11_Read_Byte();
+    }
+
+    if ((uint8_t)(buf[0] + buf[1] + buf[2] + buf[3]) != buf[4])
+    {
+        return DHT11_ERROR_CHECKSUM;
+    }
+
+    *humi = buf[0];
+    *temp = buf[2];
+
+    return DHT11_OK;
 }
 
 //��ʼ��DHT11��IO�� DQ ͬʱ���DHT11�Ĵ���

@@ -1,41 +1,51 @@
 #include "TS.h"
 
 
-uint16_t TS_ADC_Read(void)
+#define TS_ADC_WET_VALUE 1241U
+#define TS_ADC_DRY_VALUE 4095U
+
+static uint8_t TS_ADC_Read(uint16_t *value)
 {
-	//设置指定ADC的规则组通道，采样时间
-	return ADC_GetValue(ADC_CHANNEL_1, ADC_SAMPLETIME_55CYCLES_5);
+    return ADC_ReadChannel(ADC_CHANNEL_1, ADC_SAMPLETIME_55CYCLES_5, value);
 }
 
-uint16_t TS_GetData(uint16_t* moist)
+uint8_t TS_GetData(uint16_t* moist)
 {
-	uint32_t  tempData = 0;
-	for (uint8_t i = 0; i < TS_READ_TIMES; i++)
-	{
-		tempData += TS_ADC_Read();
-		delay_ms(5);
-	}
+    uint32_t tempData = 0U;
+    uint16_t sample = 0U;
+    uint8_t i;
 
-	tempData /= TS_READ_TIMES;
-	if(tempData < 1241)
-	{	
-		*moist = 100;
-			return *moist;
-	}
-	else if(tempData >= 4096)
-	{
-		*moist = 0;
-		return *moist;
-	}
-	else
-	{
-//	return 100 - (float)tempData/40.96;
-	*moist = (4096-tempData)*100 / (4096-1241);
-	return *moist;
-	}
-	
+    if (moist == NULL)
+    {
+        return 0U;
+    }
+
+    for (i = 0U; i < TS_READ_TIMES; i++)
+    {
+        if (TS_ADC_Read(&sample) == 0U)
+        {
+            return 0U;
+        }
+
+        tempData += sample;
+        delay_ms(5U);
+    }
+
+    tempData /= TS_READ_TIMES;
+
+    if (tempData <= TS_ADC_WET_VALUE)
+    {
+        *moist = 100U;
+    }
+    else if (tempData >= TS_ADC_DRY_VALUE)
+    {
+        *moist = 0U;
+    }
+    else
+    {
+        *moist = (uint16_t)((TS_ADC_DRY_VALUE - tempData) * 100U /
+                            (TS_ADC_DRY_VALUE - TS_ADC_WET_VALUE));
+    }
+
+    return 1U;
 }
-	
-
-
-

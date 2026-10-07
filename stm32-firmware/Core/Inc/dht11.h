@@ -3,6 +3,10 @@
 
 #include "stm32f1xx_hal.h"
 #include "adcx.h"
+
+#define DHT11_OK 0U
+#define DHT11_ERROR_NO_RESPONSE 1U
+#define DHT11_ERROR_CHECKSUM 2U
 //PA0
 #define DHT11_IO_IN()  {GPIOA->CRL&=0XFFFFFFF0;GPIOA->CRL|=8;}
 #define DHT11_IO_OUT() {GPIOA->CRL&=0XFFFFFFF0;GPIOA->CRL|=3;} 

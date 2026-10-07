@@ -316,9 +316,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
                     RxState = 2;  // 进入校验状态
                     
                     /* 校验逻辑（与原始代码完全一致） */
-                    if(Usart3_RxPacket[5] == (uint8_t)(Usart3_RxPacket[0] + Usart3_RxPacket[1]
-                                                     + Usart3_RxPacket[2] + Usart3_RxPacket[3]
-                                                     + Usart3_RxPacket[4]))
+                    if((Usart3_RxPacket[3] == 0x03U) &&
+                       (Usart3_RxPacket[4] == 0xFFU) &&
+                       (Usart3_RxPacket[5] == (uint8_t)(Usart3_RxPacket[0] + Usart3_RxPacket[1]
+                                                         + Usart3_RxPacket[2] + Usart3_RxPacket[3]
+                                                         + Usart3_RxPacket[4])))
                     {
                         // 校验成功
                         RxState = 0;

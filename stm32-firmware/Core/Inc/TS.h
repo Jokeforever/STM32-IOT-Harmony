@@ -35,7 +35,7 @@
 
 
 void TS_Init(void);
-uint16_t TS_GetData(uint16_t* moist);
+uint8_t TS_GetData(uint16_t* moist);
 
 #endif /* __ADC_H */
 

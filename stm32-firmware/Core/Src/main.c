@@ -62,6 +62,12 @@
 #define ESP8266_ONENET_INFO		"AT+CIPSTART=\"TCP\",\"mqtts.heclouds.com\",1883\r\n"
 #define ONENET_UPLOAD_INTERVAL	5000	// 5s
 #define USE_WATCHDOG			1
+
+#define SENSOR_VALID_TEMP	(1U << 0)
+#define SENSOR_VALID_HUMI	(1U << 1)
+#define SENSOR_VALID_LIGHT	(1U << 2)
+#define SENSOR_VALID_CO2		(1U << 3)
+#define SENSOR_VALID_MOIST	(1U << 4)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -78,6 +84,7 @@ extern System_Mode last_mode ;
 extern Bump_Mode CurrentBump_mode;
 extern Bump_Mode LastBump_mode ;
 uint8_t rx_buffer[1];
+uint8_t sensor_valid = 0U;
 uint8_t temp = 20,humi = 40;
 uint16_t light = 200,moist= 20,ppm=350;
 float water_vol = 0.0f;
@@ -206,10 +213,41 @@ int main(void)
 		if((now_tick - last_upload_tick) >= ONENET_UPLOAD_INTERVAL)	//发送间隔5s
 		{
 			last_upload_tick = now_tick;
-			TS_GetData(&moist);
-			CO2GetData(&ppm);
-			DHT11_Read_Data(&temp,&humi);
-			LDR_LuxData(&light);
+            if (TS_GetData(&moist) != 0U)
+            {
+                sensor_valid |= SENSOR_VALID_MOIST;
+            }
+            else
+            {
+                sensor_valid &= (uint8_t)~SENSOR_VALID_MOIST;
+            }
+
+            if (CO2GetData(&ppm) != 0U)
+            {
+                sensor_valid |= SENSOR_VALID_CO2;
+            }
+            else
+            {
+                sensor_valid &= (uint8_t)~SENSOR_VALID_CO2;
+            }
+
+            if (DHT11_Read_Data(&temp,&humi) == DHT11_OK)
+            {
+                sensor_valid |= (SENSOR_VALID_TEMP | SENSOR_VALID_HUMI);
+            }
+            else
+            {
+                sensor_valid &= (uint8_t)~(SENSOR_VALID_TEMP | SENSOR_VALID_HUMI);
+            }
+
+            if (LDR_LuxData(&light) != 0U)
+            {
+                sensor_valid |= SENSOR_VALID_LIGHT;
+            }
+            else
+            {
+                sensor_valid &= (uint8_t)~SENSOR_VALID_LIGHT;
+            }
 			OneNet_SendData();									//发送数据
 		
 			ESP8266_Clear();
@@ -280,6 +318,8 @@ void SystemClock_Config(void)
 
 void Hardware_Init(void)
 {
+	delay_init();
+	delay_us_init();
 //	Beep_Init();
 //	BUMP_Init();
 //	LED_Init();
