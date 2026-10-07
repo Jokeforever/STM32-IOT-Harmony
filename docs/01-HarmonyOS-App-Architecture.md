@@ -937,6 +937,9 @@ DetailModeButton
 | `moistthrehold` | 湿润阈值 | % | 数值 |
 | `tempthrehold` | 温度阈值 | ℃ | 数值 |
 
+> 截至 2026-10-07，STM32 端新增了 24C02 EEPROM 参数掉电保存，但 App 使用的 OneNET 属性标识符没有变化。App 不需要修改就能继续读取和下发已有的 `led`、`bump` 等属性。
+> 传感器读取异常时，STM32 当前会保留最后一次有效值；`sensor_status` 还没有作为 OneNET 属性上报，因此 App 暂时不能显示“无效”状态，只能看到数值冻结。
+
 ## 7. ArkUI 状态刷新规则
 
 这是本项目中最重要的经验。

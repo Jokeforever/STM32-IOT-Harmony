@@ -83,8 +83,8 @@ IOT5-smart2-IOT-final
 | PB0 | ADC1_IN8 | 光敏传感器 |
 | PB1 | GPIO_Output | 水泵控制 |
 | PB7 | GPIO_Input | LED 模式键 |
-| PB8 | I2C1_SCL | OLED SCL |
-| PB9 | I2C1_SDA | OLED SDA |
+| PB8 | I2C1_SCL | OLED / 24C02 SCL |
+| PB9 | I2C1_SDA | OLED / 24C02 SDA |
 | PB10 | USART3_TX | CO2 传感器 |
 | PB11 | USART3_RX | CO2 传感器 |
 | PB12 | GPIO_Output | 蜂鸣器 |
@@ -1040,11 +1040,68 @@ BUMP_ON / BUMP_OFF
 
 ### 17.3 增加参数保存
 
-可以使用：
+当前已经采用外部 24C02 EEPROM，具体实现见 17.4。
 
-- STM32 内部 Flash
-- 外部 EEPROM
-- OneNET 云端下发后恢复
+### 17.4 24C02 参数掉电保存实现
+
+当前工程已经在 `i2c.c/i2c.h` 中增加了 24C02 硬件 I2C 驱动，复用 OLED 使用的 I2C1：
+
+```text
+PB8 -> SCL
+PB9 -> SDA
+```
+
+24C02 使用 7 位地址 `0x50`，HAL 使用 8 位地址 `0xA0`。
+
+配置结构：
+
+```c
+typedef struct
+{
+    uint32_t magic;
+    uint16_t version;
+    uint16_t size;
+    uint16_t sequence;
+    uint8_t led_mode;
+    uint8_t bump_mode;
+    uint8_t led_manual_pwm;
+    uint8_t temp_threshold;
+    uint16_t co2_threshold;
+    uint16_t ldr_low;
+    uint16_t ldr_high;
+    uint16_t soil_low;
+    uint16_t soil_high;
+    uint16_t soil_wet_adc;
+    uint16_t soil_dry_adc;
+    uint32_t crc32;
+} DeviceConfig;
+```
+
+存储策略：
+
+1. Slot A 地址 `0x00`
+2. Slot B 地址 `0x40`
+3. 每次写空闲槽
+4. 写完后读回
+5. CRC32 正确才切换活动槽
+6. 两个槽都无效时加载默认配置
+7. 参数修改后延时 1 秒再写，避免连续按键频繁写 EEPROM
+
+首次无有效配置时：
+
+- 使用默认阈值
+- LED 默认自动 PID
+- 水泵默认 `Bump_OFF`
+- 1 秒后自动写入默认配置
+
+当前已经完成的硬件验证：
+
+- OLED 和 24C02 共用 I2C1 正常
+- 参数写入正常
+- 掉电重启后参数恢复
+- LED 模式恢复
+- 水泵模式恢复
+- 24C02 空白时默认配置回退正常
 
 ## 18. 当前 STM32 端完整功能清单
 
@@ -1067,12 +1124,16 @@ BUMP_ON / BUMP_OFF
 - [x] LED 云端控制
 - [x] 水泵云端控制
 - [x] set_reply
+- [x] ADC 校准和错误检查
+- [x] DWT 微秒延时
+- [x] 传感器有效性位图
+- [x] 24C02 参数掉电保存
 
 ## 19. 后续优化方向
 
-- MQTT 断线重连
-- 参数掉电保存
-- 传感器滤波
+- [x] MQTT 断线重连
+- [x] 参数掉电保存
+- [ ] 传感器滤波
 - 更精细的 PID
 - 任务化/FreeRTOS
 - 代码注释整理
