@@ -53,6 +53,59 @@ uint8_t ADC_ReadChannel(uint8_t ADC_Channel, uint8_t ADC_SampleTime, uint16_t *v
     return 1U;
 }
 
+static void ADC_SortValues(uint16_t *values, uint8_t count)
+{
+    for (uint8_t i = 1U; i < count; i++)
+    {
+        uint16_t key = values[i];
+        uint8_t j = i;
+
+        while ((j > 0U) && (values[j - 1U] > key))
+        {
+            values[j] = values[j - 1U];
+            j--;
+        }
+        values[j] = key;
+    }
+}
+
+uint8_t ADC_ReadFiltered(uint8_t ADC_Channel, uint8_t ADC_SampleTime,
+                         uint8_t sampleCount, uint8_t trimCount, uint16_t *value)
+{
+    uint16_t samples[ADC_FILTER_MAX_SAMPLES];
+    uint32_t sum = 0U;
+    uint8_t validCount;
+    uint8_t i;
+
+    if ((value == NULL) ||
+        (sampleCount < 3U) ||
+        (sampleCount > ADC_FILTER_MAX_SAMPLES) ||
+        (((uint16_t)trimCount * 2U) >= sampleCount))
+    {
+        return 0U;
+    }
+
+    for (i = 0U; i < sampleCount; i++)
+    {
+        if (ADC_ReadChannel(ADC_Channel, ADC_SampleTime, &samples[i]) == 0U)
+        {
+            return 0U;
+        }
+        HAL_Delay(5U);
+    }
+
+    ADC_SortValues(samples, sampleCount);
+
+    for (i = trimCount; i < (uint8_t)(sampleCount - trimCount); i++)
+    {
+        sum += samples[i];
+    }
+
+    validCount = (uint8_t)(sampleCount - (uint8_t)(trimCount * 2U));
+    *value = (uint16_t)(sum / validCount);
+    return 1U;
+}
+
 uint16_t ADC_GetValue(uint8_t ADC_Channel,uint8_t ADC_SampleTime)
 {
     uint16_t value = 0U;

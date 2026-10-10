@@ -1,35 +1,20 @@
 #include "LDR.h"
 
 	
-static uint8_t LDR_ADC_Read(uint16_t *value)
-{
-    return ADC_ReadChannel(ADC_CHANNEL1, ADC_SAMPLETIME_55CYCLES_5, value);
-}
+#define LDR_TRIM_COUNT 2U
 
 uint8_t LDR_Average_Data(uint16_t *average)
 {
-    uint32_t tempData = 0U;
-    uint16_t sample = 0U;
-    uint8_t i;
-
     if (average == NULL)
     {
         return 0U;
     }
 
-    for (i = 0U; i < LDR_READ_TIMES; i++)
-    {
-        if (LDR_ADC_Read(&sample) == 0U)
-        {
-            return 0U;
-        }
-
-        tempData += sample;
-        HAL_Delay(5U);
-    }
-
-    *average = (uint16_t)(tempData / LDR_READ_TIMES);
-    return 1U;
+    return ADC_ReadFiltered(ADC_CHANNEL1,
+                            ADC_SAMPLETIME_55CYCLES_5,
+                            LDR_READ_TIMES,
+                            LDR_TRIM_COUNT,
+                            average);
 }
 
 uint8_t LDR_LuxData(uint16_t *light)

@@ -92,6 +92,12 @@ extern uint16_t CO2_Threhold;
 extern uint8_t LED_Manu_PWM;
 uint8_t rx_buffer[1];
 uint8_t sensor_valid = 0U;
+static uint8_t s_temp_filter_history[3] = {0};
+static uint8_t s_humi_filter_history[3] = {0};
+static uint8_t s_temp_filter_count = 0U;
+static uint8_t s_humi_filter_count = 0U;
+static uint16_t s_co2_filter_history[3] = {0};
+static uint8_t s_co2_filter_count = 0U;
 uint8_t temp = 20,humi = 40;
 uint16_t light = 200,moist= 20,ppm=350;
 float water_vol = 0.0f;
@@ -113,6 +119,70 @@ void Watchdog_Feed(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+static uint8_t Filter_Median3_U8(uint8_t history[3], uint8_t *count, uint8_t value)
+{
+    uint8_t a;
+    uint8_t b;
+    uint8_t c;
+
+    if (*count < 3U)
+    {
+        history[*count] = value;
+        (*count)++;
+        return value;
+    }
+
+    history[0] = history[1];
+    history[1] = history[2];
+    history[2] = value;
+
+    a = history[0];
+    b = history[1];
+    c = history[2];
+
+    if (((a >= b) && (a <= c)) || ((a <= b) && (a >= c)))
+    {
+        return a;
+    }
+    if (((b >= a) && (b <= c)) || ((b <= a) && (b >= c)))
+    {
+        return b;
+    }
+    return c;
+}
+
+static uint16_t Filter_Median3_U16(uint16_t history[3], uint8_t *count, uint16_t value)
+{
+    uint16_t a;
+    uint16_t b;
+    uint16_t c;
+
+    if (*count < 3U)
+    {
+        history[*count] = value;
+        (*count)++;
+        return value;
+    }
+
+    history[0] = history[1];
+    history[1] = history[2];
+    history[2] = value;
+
+    a = history[0];
+    b = history[1];
+    c = history[2];
+
+    if (((a >= b) && (a <= c)) || ((a <= b) && (a >= c)))
+    {
+        return a;
+    }
+    if (((b >= a) && (b <= c)) || ((b <= a) && (b >= c)))
+    {
+        return b;
+    }
+    return c;
+}
 
 /* USER CODE END 0 */
 
@@ -232,8 +302,10 @@ int main(void)
                 sensor_valid &= (uint8_t)~SENSOR_VALID_MOIST;
             }
 
-            if (CO2GetData(&ppm) != 0U)
+            uint16_t raw_ppm = 0U;
+            if (CO2GetData(&raw_ppm) != 0U)
             {
+                ppm = Filter_Median3_U16(s_co2_filter_history, &s_co2_filter_count, raw_ppm);
                 sensor_valid |= SENSOR_VALID_CO2;
             }
             else
@@ -241,8 +313,12 @@ int main(void)
                 sensor_valid &= (uint8_t)~SENSOR_VALID_CO2;
             }
 
-            if (DHT11_Read_Data(&temp,&humi) == DHT11_OK)
+            uint8_t raw_temp = 0U;
+            uint8_t raw_humi = 0U;
+            if (DHT11_Read_Data(&raw_temp,&raw_humi) == DHT11_OK)
             {
+                temp = Filter_Median3_U8(s_temp_filter_history, &s_temp_filter_count, raw_temp);
+                humi = Filter_Median3_U8(s_humi_filter_history, &s_humi_filter_count, raw_humi);
                 sensor_valid |= (SENSOR_VALID_TEMP | SENSOR_VALID_HUMI);
             }
             else

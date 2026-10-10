@@ -3,35 +3,25 @@
 
 #define TS_ADC_WET_VALUE 1241U
 #define TS_ADC_DRY_VALUE 4095U
-
-static uint8_t TS_ADC_Read(uint16_t *value)
-{
-    return ADC_ReadChannel(ADC_CHANNEL_1, ADC_SAMPLETIME_55CYCLES_5, value);
-}
+#define TS_TRIM_COUNT 2U
 
 uint8_t TS_GetData(uint16_t* moist)
 {
-    uint32_t tempData = 0U;
-    uint16_t sample = 0U;
-    uint8_t i;
+    uint16_t tempData = 0U;
 
     if (moist == NULL)
     {
         return 0U;
     }
 
-    for (i = 0U; i < TS_READ_TIMES; i++)
+    if (ADC_ReadFiltered(ADC_CHANNEL_1,
+                         ADC_SAMPLETIME_55CYCLES_5,
+                         TS_READ_TIMES,
+                         TS_TRIM_COUNT,
+                         &tempData) == 0U)
     {
-        if (TS_ADC_Read(&sample) == 0U)
-        {
-            return 0U;
-        }
-
-        tempData += sample;
-        delay_ms(5U);
+        return 0U;
     }
-
-    tempData /= TS_READ_TIMES;
 
     if (tempData <= TS_ADC_WET_VALUE)
     {
