@@ -3,6 +3,7 @@
 
 //硬件驱动
 #include "LED.h"
+#include <math.h>
 
 
 
@@ -28,59 +29,131 @@ void LED_Set( int mode)
 	else if(mode == LED_OFF)
 	current_mode = MODE_OFF;
 	
+	LED_PID_Reset();
 	Config_MarkDirty();
 }
 
 
-void LED_Init(void) { 
-    /* 启动PWM */   
-    /* 默认参数 */
+void LED_Init(void)
+{
     led_ctrl.enabled = 1;
     led_ctrl.target_lux = 500;
-    led_ctrl.k_p = 1.5f;        /* 比例系数，越大响应越快但可能振荡 */
-    led_ctrl.dead_zone = 20;    /* ±20lux内不调整，防止振荡 */
-		led_ctrl.pwm_value = 300;
-    
-		LDR_threhold[0] = LDR_THREHOLD_LOW;
-		LDR_threhold[1] = LDR_THREHOLD_HIGH;
-    /* 初始设置50%亮度 */
+    led_ctrl.k_p = 1.5f;
+    led_ctrl.k_i = 0.0f;
+    led_ctrl.k_d = 0.0f;
+    led_ctrl.dead_zone = 20;
+    led_ctrl.pwm_value = 300;
+
+    LED_PID_Reset();
+
+    LDR_threhold[0] = LDR_THREHOLD_LOW;
+    LDR_threhold[1] = LDR_THREHOLD_HIGH;
     LED_SetPWM(led_ctrl.pwm_value);
 }
 
-/* 核心更新函数 */
-void LED_Update(int16_t current_lux) {
-    /* 如果未使能，直接返回 */
-    if (!led_ctrl.enabled) return;
-    
-    /* 保存当前光照 */
-    led_ctrl.current_lux = current_lux;
-    
-    /* 计算误差 */
-    float error = led_ctrl.target_lux - current_lux;
-    
-    /* 如果误差在死区内，不调整 */
-    if (fabs(error) <= led_ctrl.dead_zone) {
+void LED_PID_Reset(void)
+{
+    led_ctrl.integral = 0.0f;
+    led_ctrl.last_error = 0.0f;
+    led_ctrl.last_tick = HAL_GetTick();
+    led_ctrl.pid_initialized = 0U;
+}
+
+void LED_Update(int16_t current_lux)
+{
+    float error;
+    float dt;
+    float p_term;
+    float i_term;
+    float d_term;
+    float output;
+    float integral_limit;
+    int32_t new_pwm;
+    uint32_t now;
+
+    if (!led_ctrl.enabled)
+    {
         return;
     }
-    
-    /* 计算PWM调整量 */
-    int16_t adjust = (int16_t)(error * led_ctrl.k_p);
-    
-    /* 限制调整量在±50以内，防止突变 */
-    if (adjust > 50) adjust = 50;
-    if (adjust < -50) adjust = -50;
-    
-    /* 计算新的PWM值 */
-    int32_t new_pwm = (int32_t)led_ctrl.pwm_value + adjust;
-    
-    /* 限制PWM范围 */
-    if (new_pwm > PWM_MAX) new_pwm = PWM_MAX;
-    if (new_pwm < 0) new_pwm = 0;
-    
-    /* 设置PWM */
+
+    led_ctrl.current_lux = current_lux;
+    error = (float)led_ctrl.target_lux - (float)current_lux;
+
+    if (fabsf(error) <= (float)led_ctrl.dead_zone)
+    {
+        led_ctrl.integral = 0.0f;
+        led_ctrl.last_error = error;
+        led_ctrl.last_tick = HAL_GetTick();
+        return;
+    }
+
+    now = HAL_GetTick();
+    if (led_ctrl.pid_initialized == 0U)
+    {
+        led_ctrl.last_tick = now;
+        led_ctrl.last_error = error;
+        led_ctrl.integral = 0.0f;
+        led_ctrl.pid_initialized = 1U;
+        return;
+    }
+
+    dt = (float)(now - led_ctrl.last_tick) / 1000.0f;
+    if (dt < 0.001f)
+    {
+        dt = 0.001f;
+    }
+    if (dt > 0.100f)
+    {
+        dt = 0.100f;
+    }
+
+    led_ctrl.integral += error * dt;
+
+    if (led_ctrl.k_i > 0.0f)
+    {
+        integral_limit = (float)PWM_MAX / led_ctrl.k_i;
+        if (led_ctrl.integral > integral_limit)
+        {
+            led_ctrl.integral = integral_limit;
+        }
+        if (led_ctrl.integral < -integral_limit)
+        {
+            led_ctrl.integral = -integral_limit;
+        }
+    }
+    else
+    {
+        led_ctrl.integral = 0.0f;
+    }
+
+    p_term = led_ctrl.k_p * error;
+    i_term = led_ctrl.k_i * led_ctrl.integral;
+    d_term = led_ctrl.k_d * (error - led_ctrl.last_error) / dt;
+    output = p_term + i_term + d_term;
+
+    if (output > 50.0f)
+    {
+        output = 50.0f;
+    }
+    if (output < -50.0f)
+    {
+        output = -50.0f;
+    }
+
+    new_pwm = (int32_t)led_ctrl.pwm_value + (int32_t)output;
+    if (new_pwm > PWM_MAX)
+    {
+        new_pwm = PWM_MAX;
+    }
+    if (new_pwm < 0)
+    {
+        new_pwm = 0;
+    }
+
     __HAL_TIM_SET_COMPARE(&PWM_TIMER, PWM_CHANNEL, (uint16_t)new_pwm);
-		
     led_ctrl.pwm_value = (uint16_t)new_pwm;
+    led_ctrl.last_error = error;
+    led_ctrl.last_tick = now;
 }
 
 void LED_SetPWM(int16_t pwm) {
@@ -91,6 +164,7 @@ void LED_SetPWM(int16_t pwm) {
 
 void Mode_Switch(void) 
 {
+	LED_PID_Reset();
 	
     switch (current_mode) {
         case MODE_OFF:

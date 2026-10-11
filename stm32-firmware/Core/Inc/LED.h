@@ -27,13 +27,23 @@ void LED_Set(int mode);
 
 /* 控制结构体 */
 typedef struct {
-    uint8_t enabled;      /* 使能标志 */
-    int16_t target_lux;     /* 目标光照(lux) */
-    int16_t current_lux;    /* 当前光照(lux) */
-    uint16_t pwm_value;   /* 当前PWM值 */
-    float k_p;            /* 比例系数 */
-    uint16_t dead_zone;   /* 死区范围(lux) */
+    uint8_t enabled;
+    int16_t target_lux;
+    int16_t current_lux;
+    uint16_t pwm_value;
+    float k_p;
+    float k_i;
+    float k_d;
+    float integral;
+    float last_error;
+    uint32_t last_tick;
+    uint8_t pid_initialized;
+    uint16_t dead_zone;
 } LED_Control;
+
+extern LED_Control led_ctrl;
+
+void LED_PID_Reset(void);
 
 /* API函数 */
 void LED_Update(int16_t current_lux);

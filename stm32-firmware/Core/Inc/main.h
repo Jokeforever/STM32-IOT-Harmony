@@ -53,7 +53,8 @@ extern "C" {
 void Error_Handler(void);
 
 #define CONFIG_MAGIC       0x43464731U
-#define CONFIG_VERSION     1U
+#define CONFIG_VERSION     2U
+#define CONFIG_VERSION_V1  1U
 #define CONFIG_SLOT_A      0x00U
 #define CONFIG_SLOT_B      0x40U
 
@@ -74,6 +75,11 @@ typedef struct
     uint16_t soil_high;
     uint16_t soil_wet_adc;
     uint16_t soil_dry_adc;
+    int16_t pid_target_lux;
+    uint16_t pid_dead_zone;
+    int32_t pid_kp_x1000;
+    int32_t pid_ki_x1000;
+    int32_t pid_kd_x1000;
     uint32_t crc32;
 } DeviceConfig;
 
