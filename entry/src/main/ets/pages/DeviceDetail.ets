@@ -147,13 +147,15 @@ struct ThresholdStepper {
       .alignItems(HorizontalAlign.Start)
 
       Row() {
-        Button('-')
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-          .width(40)
-          .height(40)
-          .backgroundColor('#F2F4F7')
-          .fontColor('#344054')
+        Button({ type: ButtonType.Circle }) {
+          Text('-')
+            .fontSize(28)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#344054')
+        }
+        .width(40)
+        .height(40)
+        .backgroundColor('#F2F4F7')
           .enabled(this.buttonEnabled)
           .onClick(() => {
             if (this.onDecrease) {
@@ -161,13 +163,15 @@ struct ThresholdStepper {
             }
           })
 
-        Button('+')
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-          .width(40)
-          .height(40)
-          .backgroundColor('#1D6FE8')
-          .fontColor(Color.White)
+        Button({ type: ButtonType.Circle }) {
+          Text('+')
+            .fontSize(28)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Color.White)
+        }
+        .width(40)
+        .height(40)
+        .backgroundColor('#1D6FE8')
           .enabled(this.buttonEnabled)
           .onClick(() => {
             if (this.onIncrease) {
