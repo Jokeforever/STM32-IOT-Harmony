@@ -131,24 +131,16 @@ void LED_Update(int16_t current_lux)
     d_term = led_ctrl.k_d * (error - led_ctrl.last_error) / dt;
     output = p_term + i_term + d_term;
 
-    if (output > 50.0f)
+    if (output > (float)PWM_MAX)
     {
-        output = 50.0f;
+        output = (float)PWM_MAX;
     }
-    if (output < -50.0f)
+    if (output < 0.0f)
     {
-        output = -50.0f;
+        output = 0.0f;
     }
 
-    new_pwm = (int32_t)led_ctrl.pwm_value + (int32_t)output;
-    if (new_pwm > PWM_MAX)
-    {
-        new_pwm = PWM_MAX;
-    }
-    if (new_pwm < 0)
-    {
-        new_pwm = 0;
-    }
+    new_pwm = (int32_t)output;
 
     __HAL_TIM_SET_COMPARE(&PWM_TIMER, PWM_CHANNEL, (uint16_t)new_pwm);
     led_ctrl.pwm_value = (uint16_t)new_pwm;
@@ -200,9 +192,7 @@ void LED_Func(void)
              break;
 						
             case MODE_AUTO_PID:
-
-						LED_Update(light);
-						break;
+            break;
 
         }
 }

@@ -226,6 +226,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	uint32_t last_upload_tick = 0;
 	uint32_t last_reconnect_tick = 0;
+	uint32_t last_led_control_tick = 0;
 	unsigned char *dataPtr = NULL;
 	uint8_t net_retry = 0;
 	uint8_t login_retry = 0;
@@ -275,6 +276,22 @@ int main(void)
     /* USER CODE BEGIN 3 */
 		
 		Key_Func();
+
+		if ((current_mode == MODE_AUTO_PID) &&
+		    ((HAL_GetTick() - last_led_control_tick) >= 1000U))
+		{
+			last_led_control_tick = HAL_GetTick();
+
+			if (LDR_LuxData(&light) != 0U)
+			{
+				sensor_valid |= SENSOR_VALID_LIGHT;
+				LED_Update(light);
+			}
+			else
+			{
+				sensor_valid &= (uint8_t)~SENSOR_VALID_LIGHT;
+			}
+		}
 
 		if(!OneNet_IsConnected() &&
 		   (HAL_GetTick() - last_reconnect_tick >= 10000))
