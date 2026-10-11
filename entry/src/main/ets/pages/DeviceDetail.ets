@@ -148,10 +148,10 @@ struct ThresholdStepper {
 
       Row() {
         Button('-')
-          .fontSize(22)
+          .fontSize(24)
           .fontWeight(FontWeight.Bold)
-          .width(36)
-          .height(36)
+          .width(40)
+          .height(40)
           .backgroundColor('#F2F4F7')
           .fontColor('#344054')
           .enabled(this.buttonEnabled)
@@ -162,10 +162,10 @@ struct ThresholdStepper {
           })
 
         Button('+')
-          .fontSize(22)
+          .fontSize(24)
           .fontWeight(FontWeight.Bold)
-          .width(36)
-          .height(36)
+          .width(40)
+          .height(40)
           .backgroundColor('#1D6FE8')
           .fontColor(Color.White)
           .enabled(this.buttonEnabled)
