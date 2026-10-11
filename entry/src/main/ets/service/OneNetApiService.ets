@@ -46,6 +46,10 @@ interface OneNetSetBody {
 interface OneNetSetParams {
   led?: number;
   bump?: number;
+  CO2threhold?: number;
+  droughtthrehold?: number;
+  moistthrehold?: number;
+  tempthrehold?: number;
 }
 
 export class OneNetApiService {
@@ -157,6 +161,10 @@ export class OneNetApiService {
     await this.setDeviceProperty('bump', mode);
   }
 
+  async setThreshold(identifier: string, value: number): Promise<void> {
+    await this.setDeviceProperty(identifier, value);
+  }
+
   private async setDeviceProperty(
     identifier: string,
     value: number
@@ -170,6 +178,14 @@ export class OneNetApiService {
         params.led = value;
       } else if (identifier === 'bump') {
         params.bump = value;
+      } else if (identifier === 'CO2threhold') {
+        params.CO2threhold = value;
+      } else if (identifier === 'droughtthrehold') {
+        params.droughtthrehold = value;
+      } else if (identifier === 'moistthrehold') {
+        params.moistthrehold = value;
+      } else if (identifier === 'tempthrehold') {
+        params.tempthrehold = value;
       }
 
       const body: OneNetSetBody = {

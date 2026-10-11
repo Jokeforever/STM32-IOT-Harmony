@@ -702,6 +702,7 @@ void OneNet_RevPro(unsigned char *cmd)
 //	int num = 0;
 	
 	cJSON *raw_json,*params_json,*led_json,*bump_json,*id_json;
+	cJSON *co2_th_json,*drought_json,*moist_json,*temp_th_json;
 	char msg_id[64] = "0";
 	char reply_topic[80];
 	char reply_payload[160];
@@ -775,6 +776,59 @@ void OneNet_RevPro(unsigned char *cmd)
 									if(bump_value >= 0 && bump_value <= 2)
 									{
 										Bump_Set(bump_value);
+									}
+								}
+
+								co2_th_json = cJSON_GetObjectItem(params_json, "CO2threhold");
+								drought_json = cJSON_GetObjectItem(params_json, "droughtthrehold");
+								moist_json = cJSON_GetObjectItem(params_json, "moistthrehold");
+								temp_th_json = cJSON_GetObjectItem(params_json, "tempthrehold");
+
+								if(co2_th_json != NULL && co2_th_json->type == cJSON_Number)
+								{
+									int value = co2_th_json->valueint;
+									if(value >= 350 && value <= 4000)
+									{
+										CO2_Threhold = (uint16_t)value;
+										Config_MarkDirty();
+									}
+								}
+
+								if(drought_json != NULL && drought_json->type == cJSON_Number)
+								{
+									int value = drought_json->valueint;
+									if(value >= 0 && value <= 100)
+									{
+										if(value > (int)Bump_threhold[1])
+										{
+											value = (int)Bump_threhold[1];
+										}
+										Bump_threhold[0] = (uint16_t)value;
+										Config_MarkDirty();
+									}
+								}
+
+								if(moist_json != NULL && moist_json->type == cJSON_Number)
+								{
+									int value = moist_json->valueint;
+									if(value >= 0 && value <= 100)
+									{
+										if(value < (int)Bump_threhold[0])
+										{
+											value = (int)Bump_threhold[0];
+										}
+										Bump_threhold[1] = (uint16_t)value;
+										Config_MarkDirty();
+									}
+								}
+
+								if(temp_th_json != NULL && temp_th_json->type == cJSON_Number)
+								{
+									int value = temp_th_json->valueint;
+									if(value >= 0 && value <= 100)
+									{
+										temp_threhold = (uint8_t)value;
+										Config_MarkDirty();
 									}
 								}
 

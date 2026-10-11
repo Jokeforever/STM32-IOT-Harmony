@@ -122,6 +122,66 @@ struct DetailModeButton {
 }
 
 @Component
+struct ThresholdStepper {
+  @Prop label: string = '';
+  @Prop valueText: string = '--';
+  @Prop unit: string = '';
+  @Prop buttonEnabled: boolean = true;
+  onDecrease?: () => void;
+  onIncrease?: () => void;
+
+  build() {
+    Row() {
+      Column() {
+        Text(this.label)
+          .fontSize(13)
+          .fontColor('#667085')
+
+        Text(this.valueText === '--' ? '--' : this.valueText + this.unit)
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#101828')
+          .margin({ top: 4 })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+
+      Row() {
+        Button('-')
+          .fontSize(18)
+          .width(36)
+          .height(32)
+          .backgroundColor('#F2F4F7')
+          .fontColor('#344054')
+          .enabled(this.buttonEnabled)
+          .onClick(() => {
+            if (this.onDecrease) {
+              this.onDecrease();
+            }
+          })
+
+        Button('+')
+          .fontSize(18)
+          .width(36)
+          .height(32)
+          .backgroundColor('#1D6FE8')
+          .fontColor(Color.White)
+          .enabled(this.buttonEnabled)
+          .onClick(() => {
+            if (this.onIncrease) {
+              this.onIncrease();
+            }
+          })
+      }
+      .width(84)
+      .justifyContent(FlexAlign.SpaceBetween)
+    }
+    .width('100%')
+    .padding({ top: 8, bottom: 8 })
+  }
+}
+
+@Component
 export struct DeviceDetail {
   navPathStack: NavPathStack = new NavPathStack();
   private oneNetApi: OneNetApiService = new OneNetApiService();
@@ -321,6 +381,79 @@ export struct DeviceDetail {
 
   private getUnit(identifier: string): string {
     return PropertyHelper.getUnit(identifier);
+  }
+
+  private parseIntValue(value: string, fallback: number): number {
+    const parsed = parseInt(value);
+    return Number.isNaN(parsed) ? fallback : parsed;
+  }
+
+  private getThresholdMin(identifier: string): number {
+    return identifier === 'CO2threhold' ? 350 : 0;
+  }
+
+  private getThresholdMax(identifier: string): number {
+    return identifier === 'CO2threhold' ? 4000 : 100;
+  }
+
+  private updateLocalProperty(identifier: string, value: string): void {
+    const updated: DeviceProperty[] = [];
+    let found = false;
+
+    for (let i: number = 0; i < this.properties.length; i++) {
+      if (this.properties[i].identifier === identifier) {
+        updated.push({
+          identifier: this.properties[i].identifier,
+          value: value,
+          name: this.properties[i].name,
+          dataType: this.properties[i].dataType,
+          accessMode: this.properties[i].accessMode,
+          time: this.properties[i].time
+        });
+        found = true;
+      } else {
+        updated.push(this.properties[i]);
+      }
+    }
+
+    if (!found) {
+      updated.push({ identifier: identifier, value: value });
+    }
+    this.properties = updated;
+  }
+
+  private async adjustThreshold(identifier: string, delta: number): Promise<void> {
+    if (this.loading) {
+      return;
+    }
+
+    this.loading = true;
+    this.errorMessage = '';
+
+    try {
+      const current = this.parseIntValue(
+        PropertyHelper.getValue(this.properties, identifier),
+        0
+      );
+      let next = current + delta;
+      const min = this.getThresholdMin(identifier);
+      const max = this.getThresholdMax(identifier);
+
+      if (next < min) {
+        next = min;
+      }
+      if (next > max) {
+        next = max;
+      }
+
+      await this.oneNetApi.setThreshold(identifier, next);
+      this.updateLocalProperty(identifier, next.toString());
+    } catch (error) {
+      const err = error as Error;
+      this.errorMessage = '阈值下发失败：' + err.message;
+    } finally {
+      this.loading = false;
+    }
   }
 
   private buildResult(): DeviceDetailParam {
@@ -647,25 +780,53 @@ export struct DeviceDetail {
             .margin({ top: 18 })
 
           Column() {
-            DetailPropertyRow({
+            ThresholdStepper({
               label: 'CO2 阈值',
-              value: this.getDisplayValue('CO2threhold'),
-              unit: this.getUnit('CO2threhold')
+              valueText: this.getDisplayValue('CO2threhold'),
+              unit: this.getUnit('CO2threhold'),
+              buttonEnabled: !this.loading,
+              onDecrease: () => {
+                this.adjustThreshold('CO2threhold', -100);
+              },
+              onIncrease: () => {
+                this.adjustThreshold('CO2threhold', 100);
+              }
             })
-            DetailPropertyRow({
+            ThresholdStepper({
               label: '干旱阈值',
-              value: this.getDisplayValue('droughtthrehold'),
-              unit: this.getUnit('droughtthrehold')
+              valueText: this.getDisplayValue('droughtthrehold'),
+              unit: this.getUnit('droughtthrehold'),
+              buttonEnabled: !this.loading,
+              onDecrease: () => {
+                this.adjustThreshold('droughtthrehold', -1);
+              },
+              onIncrease: () => {
+                this.adjustThreshold('droughtthrehold', 1);
+              }
             })
-            DetailPropertyRow({
+            ThresholdStepper({
               label: '湿润阈值',
-              value: this.getDisplayValue('moistthrehold'),
-              unit: this.getUnit('moistthrehold')
+              valueText: this.getDisplayValue('moistthrehold'),
+              unit: this.getUnit('moistthrehold'),
+              buttonEnabled: !this.loading,
+              onDecrease: () => {
+                this.adjustThreshold('moistthrehold', -1);
+              },
+              onIncrease: () => {
+                this.adjustThreshold('moistthrehold', 1);
+              }
             })
-            DetailPropertyRow({
+            ThresholdStepper({
               label: '温度阈值',
-              value: this.getDisplayValue('tempthrehold'),
-              unit: this.getUnit('tempthrehold')
+              valueText: this.getDisplayValue('tempthrehold'),
+              unit: this.getUnit('tempthrehold'),
+              buttonEnabled: !this.loading,
+              onDecrease: () => {
+                this.adjustThreshold('tempthrehold', -1);
+              },
+              onIncrease: () => {
+                this.adjustThreshold('tempthrehold', 1);
+              }
             })
           }
           .width('92%')

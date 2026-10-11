@@ -2,6 +2,25 @@
 
 本文件记录项目中的重要功能、修复和验证结果。
 
+## 2026-10-11 - 阈值远程配置
+
+### 新增
+
+- 鸿蒙 App 详情页的四个阈值改为可调步进控件。
+- App 支持下发 `CO2threhold`、`droughtthrehold`、`moistthrehold`、`tempthrehold`。
+- STM32 解析 OneNET `property/set` 中的阈值属性。
+- 阈值范围检查：
+  - CO2：350 ~ 4000
+  - 温度：0 ~ 100
+  - 干旱/湿润：0 ~ 100
+- 干旱阈值和湿润阈值保持先后关系。
+- 阈值变化后调用 `Config_MarkDirty()`，延时保存到 24C02。
+
+### 验证
+
+- STM32 原始工程 Keil 编译通过，0 Error(s)。
+- App 代码已写入，待 DevEco Studio 构建和联机验证。
+
 ## 2026-10-11 - LED 位置式 PID 修正
 
 ### 修正
