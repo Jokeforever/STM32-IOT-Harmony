@@ -537,10 +537,43 @@ adjust = error * k_p
 ```c
 target_lux = 500
 k_p = 1.5f
+k_i = 0.0f
+k_d = 0.0f
 dead_zone = 20
 initial_pwm = 300
 PWM_MAX = 1000
 ```
+
+### 6.6 完整 PID 控制器
+
+当前自动模式已经扩展为完整 PID：
+
+```text
+error = target_lux - current_lux
+integral += error * dt
+output = Kp * error + Ki * integral + Kd * (error - last_error) / dt
+```
+
+实现中包含：
+
+- 积分限幅
+- 死区清零积分
+- 单次输出限幅 `±50`
+- PWM 限幅 `0 ~ 1000`
+- 模式切换时 PID 状态复位
+- `dt` 范围限制
+
+默认参数保持：
+
+```text
+Kp = 1.5
+Ki = 0
+Kd = 0
+```
+
+因此首次烧录不会突然改变当前 LED 表现，后续可以逐步调 `Ki` 和 `Kd`。
+
+PID 参数已经加入 24C02 配置结构，配置版本从 `1` 升级到 `2`。读取旧版配置时会自动迁移并保留原有阈值和模式。
 
 ## 7. 水泵控制模块
 
@@ -1169,13 +1202,16 @@ typedef struct
 - [x] DWT 微秒延时
 - [x] 传感器有效性位图
 - [x] 24C02 参数掉电保存
+- [x] 完整 PID 控制器
+- [x] PID 参数掉电保存
+- [x] 配置 v1 -> v2 自动迁移
 
 ## 19. 后续优化方向
 
 - [x] MQTT 断线重连
 - [x] 参数掉电保存
 - [x] 传感器滤波
-- 更精细的 PID
+- [x] 更精细的 PID
 - 任务化/FreeRTOS
 - 代码注释整理
 - 多设备支持
