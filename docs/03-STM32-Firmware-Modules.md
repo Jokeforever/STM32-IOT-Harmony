@@ -952,6 +952,40 @@ $sys/{PROID}/{DEVICE_NAME}/thing/property/set_reply
 {"id":"xxx","code":200,"msg":"success"}
 ```
 
+### 11.7 阈值远程配置
+
+当 OneNET 下发：
+
+```json
+{
+  "params": {
+    "CO2threhold": 1800,
+    "droughtthrehold": 35,
+    "moistthrehold": 70,
+    "tempthrehold": 26
+  }
+}
+```
+
+STM32 会：
+
+1. 从 `params` 中取出四个属性
+2. 检查类型和范围
+3. 更新对应变量
+4. 调用 `Config_MarkDirty()`
+5. 约 1 秒后写入 24C02
+
+范围：
+
+| 属性 | 范围 |
+|---|---:|
+| `CO2threhold` | 350 ~ 4000 |
+| `droughtthrehold` | 0 ~ 100 |
+| `moistthrehold` | 0 ~ 100 |
+| `tempthrehold` | 0 ~ 100 |
+
+干旱阈值不会大于湿润阈值，湿润阈值不会小于干旱阈值。
+
 ## 12. MQTT 协议层
 
 文件：
@@ -1219,6 +1253,7 @@ typedef struct
 - [x] 完整 PID 控制器
 - [x] PID 参数掉电保存
 - [x] 配置 v1 -> v2 自动迁移
+- [x] 阈值远程配置
 
 ## 19. 后续优化方向
 
