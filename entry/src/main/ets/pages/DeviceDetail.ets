@@ -188,6 +188,82 @@ struct ThresholdStepper {
 }
 
 @Component
+struct HistoryChart {
+  @Prop title: string = '';
+  @Prop values: number[] = [];
+  @Prop color: string = '#1D6FE8';
+  @Prop minValue: number = 0;
+  @Prop maxValue: number = 100;
+  @Prop unit: string = '';
+
+  private buildPoints(): number[][] {
+    const points: number[][] = [];
+    const chartWidth = 280;
+    const chartHeight = 80;
+    const count = this.values.length;
+    const span = this.maxValue - this.minValue;
+
+    for (let i: number = 0; i < count; i++) {
+      const x = count === 1 ? 0 : (chartWidth * i) / (count - 1);
+      let value = this.values[i];
+      if (value < this.minValue) {
+        value = this.minValue;
+      }
+      if (value > this.maxValue) {
+        value = this.maxValue;
+      }
+      const y = span === 0
+        ? chartHeight
+        : chartHeight - ((value - this.minValue) / span) * chartHeight;
+      points.push([x, y]);
+    }
+
+    return points;
+  }
+
+  build() {
+    Column() {
+      Row() {
+        Text(this.title)
+          .fontSize(12)
+          .fontColor('#667085')
+
+        Blank()
+
+        Text(this.values.length > 0
+          ? this.values[this.values.length - 1].toFixed(1) + this.unit
+          : '--')
+          .fontSize(12)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#101828')
+      }
+      .width('100%')
+
+      if (this.values.length < 2) {
+        Text('等待数据...')
+          .fontSize(11)
+          .fontColor('#98A2B3')
+          .height(80)
+          .textAlign(TextAlign.Center)
+          .width('100%')
+      } else {
+        Row() {
+          Polyline({ width: 280, height: 80 })
+            .points(this.buildPoints())
+            .stroke(this.color)
+            .strokeWidth(2)
+            .fill(Color.Transparent)
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
+      }
+    }
+    .width('100%')
+    .padding({ top: 8, bottom: 8 })
+  }
+}
+
+@Component
 export struct DeviceDetail {
   navPathStack: NavPathStack = new NavPathStack();
   private oneNetApi: OneNetApiService = new OneNetApiService();
@@ -207,6 +283,8 @@ export struct DeviceDetail {
   @State loading: boolean = false;
   @State errorMessage: string = '';
   @State autoRefresh: boolean = true;
+  @State tempHistory: number[] = [];
+  @State humiHistory: number[] = [];
 
   aboutToDisappear(): void {
     this.stopAutoRefresh();
@@ -261,6 +339,15 @@ export struct DeviceDetail {
       : normalized;
   }
 
+  private pushHistory(history: number[], value: number): number[] {
+    const next: number[] = history.slice();
+    next.push(value);
+    if (next.length > 20) {
+      next.shift();
+    }
+    return next;
+  }
+
   private async refreshData(): Promise<void> {
     const properties = await this.oneNetApi.queryDeviceProperties();
     let hasValue: boolean = false;
@@ -287,11 +374,13 @@ export struct DeviceDetail {
       const temp = PropertyHelper.getValue(properties, 'temp');
       if (temp !== '') {
         this.temperature = parseFloat(temp);
+        this.tempHistory = this.pushHistory(this.tempHistory, this.temperature);
       }
 
       const humi = PropertyHelper.getValue(properties, 'humi');
       if (humi !== '') {
         this.humidity = parseFloat(humi);
+        this.humiHistory = this.pushHistory(this.humiHistory, this.humidity);
       }
 
       const led = PropertyHelper.getValue(properties, 'led');
@@ -649,6 +738,44 @@ export struct DeviceDetail {
           }
           .width('92%')
           .margin({ top: 10 })
+
+          // ===== 历史曲线 =====
+          Text('历史曲线')
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#101828')
+            .width('92%')
+            .margin({ top: 18 })
+
+          Column() {
+            HistoryChart({
+              title: '温度',
+              values: this.tempHistory,
+              color: '#F79009',
+              minValue: 0,
+              maxValue: 50,
+              unit: '℃'
+            })
+            HistoryChart({
+              title: '湿度',
+              values: this.humiHistory,
+              color: '#1D6FE8',
+              minValue: 0,
+              maxValue: 100,
+              unit: '%'
+            })
+          }
+          .width('92%')
+          .padding(14)
+          .margin({ top: 10 })
+          .backgroundColor(Color.White)
+          .borderRadius(16)
+          .shadow({
+            radius: 10,
+            color: '#0F1D2939',
+            offsetX: 0,
+            offsetY: 3
+          })
 
           // ===== 执行器 =====
           Text('执行器')
