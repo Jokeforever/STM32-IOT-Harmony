@@ -56,6 +56,14 @@ export interface DeviceProperty {
   time?: number;
 }
 
+export interface CachedAppState {
+  properties: DeviceProperty[];
+  lastSyncTime: string;
+  lastReportTime: number;
+  tempHistory: number[];
+  humiHistory: number[];
+}
+
 export interface DeviceCloudStatus {
   online: boolean;
   lastOnlineTime: string;

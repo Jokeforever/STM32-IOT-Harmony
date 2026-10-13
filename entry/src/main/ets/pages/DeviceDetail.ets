@@ -1,4 +1,5 @@
 import {
+  CachedAppState,
   DeviceDetailParam,
   DeviceProperty,
   DeviceState,
@@ -363,6 +364,31 @@ export struct DeviceDetail {
       : normalized;
   }
 
+  private restoreCachedHistory(): void {
+    const raw = AppStorage.get<string>('cachedAppState');
+    if (raw === undefined || raw === '') {
+      return;
+    }
+
+    try {
+      const cached = JSON.parse(raw) as CachedAppState;
+      this.tempHistory = cached.tempHistory ?? [];
+      this.humiHistory = cached.humiHistory ?? [];
+    } catch (error) {
+    }
+  }
+
+  private saveCachedState(): void {
+    const cached: CachedAppState = {
+      properties: this.properties,
+      lastSyncTime: this.lastSyncTime,
+      lastReportTime: this.lastReportTime,
+      tempHistory: this.tempHistory,
+      humiHistory: this.humiHistory
+    };
+    AppStorage.setOrCreate('cachedAppState', JSON.stringify(cached));
+  }
+
   private getSensorStatusMask(): number {
     const raw = PropertyHelper.getValue(this.properties, 'sensor_status');
     const parsed = parseInt(raw);
@@ -445,6 +471,7 @@ export struct DeviceDetail {
     }
 
     this.lastSyncTime = this.formatTime(new Date());
+    this.saveCachedState();
   }
 
   private async refresh(): Promise<void> {
@@ -1134,6 +1161,7 @@ export struct DeviceDetail {
           this.ledMode = parseInt(led);
         }
 
+        this.restoreCachedHistory();
         this.refresh();
         this.startAutoRefresh();
       }

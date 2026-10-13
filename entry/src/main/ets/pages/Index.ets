@@ -1,5 +1,6 @@
 import { DeviceDetail } from './DeviceDetail';
 import {
+  CachedAppState,
   DeviceDetailParam,
   DeviceProperty,
   DeviceState,
@@ -189,6 +190,10 @@ struct Index {
   @State autoRefresh: boolean = true;
 
   aboutToAppear(): void {
+    if (AppStorage.get<string>('cachedAppState') === undefined) {
+      PersistentStorage.persistProp('cachedAppState', '');
+    }
+    this.restoreCachedState();
     this.syncOneNet();
     this.startAutoRefresh();
   }
@@ -224,6 +229,68 @@ struct Index {
       ' ' + this.pad(date.getHours()) +
       ':' + this.pad(date.getMinutes()) +
       ':' + this.pad(date.getSeconds());
+  }
+
+  private restoreCachedState(): void {
+    const raw = AppStorage.get<string>('cachedAppState');
+    if (raw === undefined || raw === '') {
+      return;
+    }
+
+    try {
+      const cached = JSON.parse(raw) as CachedAppState;
+      if (cached.properties.length === 0) {
+        return;
+      }
+
+      this.properties = cached.properties;
+      this.lastSyncTime = cached.lastSyncTime;
+      this.lastReportTime = cached.lastReportTime;
+
+      if (cached.lastReportTime > 0) {
+        this.lastOnlineTime = this.formatTime(new Date(cached.lastReportTime));
+        this.deviceOnline = (Date.now() - cached.lastReportTime) < 30000;
+      }
+
+      const temp = PropertyHelper.getValue(cached.properties, 'temp');
+      if (temp !== '') {
+        this.temperature = parseFloat(temp);
+      }
+
+      const humi = PropertyHelper.getValue(cached.properties, 'humi');
+      if (humi !== '') {
+        this.humidity = parseFloat(humi);
+      }
+
+      const led = PropertyHelper.getValue(cached.properties, 'led');
+      if (led !== '') {
+        this.ledMode = parseInt(led);
+      }
+    } catch (error) {
+    }
+  }
+
+  private saveCachedState(): void {
+    let tempHistory: number[] = [];
+    let humiHistory: number[] = [];
+    const raw = AppStorage.get<string>('cachedAppState');
+    if (raw !== undefined && raw !== '') {
+      try {
+        const existing = JSON.parse(raw) as CachedAppState;
+        tempHistory = existing.tempHistory ?? [];
+        humiHistory = existing.humiHistory ?? [];
+      } catch (error) {
+      }
+    }
+
+    const cached: CachedAppState = {
+      properties: this.properties,
+      lastSyncTime: this.lastSyncTime,
+      lastReportTime: this.lastReportTime,
+      tempHistory: tempHistory,
+      humiHistory: humiHistory
+    };
+    AppStorage.setOrCreate('cachedAppState', JSON.stringify(cached));
   }
 
   private async refreshOneNetData(): Promise<void> {
@@ -278,6 +345,7 @@ struct Index {
     }
 
     this.lastSyncTime = this.formatTime(new Date());
+    this.saveCachedState();
   }
 
   private async syncOneNet(): Promise<void> {
