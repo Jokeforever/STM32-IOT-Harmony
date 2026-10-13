@@ -8,19 +8,19 @@
 
 #include <stdint.h>
 
-/* 用户可配置宏 */
+/* 鐢ㄦ埛鍙厤缃畯 */
 #define USART3_RX_PACKET_SIZE 6
 #define CO2_THREHOLD 2000 
 
-/* 全局变量声明 */
+/* 鍏ㄥ眬鍙橀噺澹版槑 */
 extern uint8_t RxState;
 extern uint8_t pRxPacket;
-extern uint8_t rx_byte;  // 单字节接收缓冲区
+extern uint8_t rx_byte;  // 鍗曞瓧鑺傛帴鏀剁紦鍐插尯
 extern uint8_t Usart3_RxPacket[USART3_RX_PACKET_SIZE];
 extern volatile uint8_t Usart3_RxFlag;
 
-/* 函数声明 */
-void USART3_Rx_Start_IT(void);  // 启动中断接收
+/* 鍑芥暟澹版槑 */
+void USART3_Rx_Start_IT(void);  // 鍚姩涓柇鎺ユ敹
 
 
 uint8_t CO2GetData(uint16_t *data);

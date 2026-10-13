@@ -9,12 +9,12 @@
 #include "stdio.h"
 
 typedef enum {
-    DISPLAY_NONE = 0,   // ÎÞÏÔÊ¾
-    DISPLAY_SCREEN1,    // ½çÃæ1£º»·¾³ÎÂÊª¶È           CO2
-    DISPLAY_SCREEN2,		// ½çÃæ2£º	¹âÕÕ   	        Ì¨µÆ×´Ì¬
-		DISPLAY_SCREEN3,		// ½çÃæ3£º	ÍÁÈÀÊª¶È	 Ë®Á¿   Ë®±Ã×´Ì¬ 
-		DISPLAY_SCREEN4,    // ½çÃæ4£º ²ÎÊý1
-		DISPLAY_SCREEN5		// ½çÃæ5£º ²ÎÊý2
+    DISPLAY_NONE = 0,   // æ— æ˜¾ç¤º
+    DISPLAY_SCREEN1,    // ç•Œé¢1ï¼šçŽ¯å¢ƒæ¸©æ¹¿åº¦           CO2
+    DISPLAY_SCREEN2,		// ç•Œé¢2ï¼š	å…‰ç…§   	        å°ç¯çŠ¶æ€
+		DISPLAY_SCREEN3,		// ç•Œé¢3ï¼š	åœŸå£¤æ¹¿åº¦	 æ°´é‡   æ°´æ³µçŠ¶æ€ 
+		DISPLAY_SCREEN4,    // ç•Œé¢4ï¼š å‚æ•°1
+		DISPLAY_SCREEN5		// ç•Œé¢5ï¼š å‚æ•°2
 } DisplayScreen;
 
 typedef enum {

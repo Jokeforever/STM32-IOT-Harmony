@@ -2,7 +2,7 @@
 #define __OLED_H__
 
 #include "stm32f1xx_hal.h"
-//Ê¹ÓÃÓ²¼þI2C1
+//ä½¿ç”¨ç¡¬ä»¶I2C1
 ///
 #define   OLED_GPIO_CLK_ENABLE()         __HAL_RCC_GPIOA_CLK_ENABLE()
 

@@ -5,7 +5,7 @@
 #include "stm32f1xx_hal.h"
 
 
-#define USART_DEBUG		&huart1		//调试打印所使用的串口组
+#define USART_DEBUG		&huart1		//璋冭瘯鎵撳嵃鎵�浣跨敤鐨勪覆鍙ｇ粍
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 extern volatile uint8_t received_data;

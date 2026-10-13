@@ -2,8 +2,8 @@
 #define _ADCX_H_
 #include "stm32f1xx_hal.h"                // Device header
 
-// ADC ฑเบลักิ๑
-// ฟษาิสว ADC1/2/3
+// ADC ็ผ–ๅท้€ๆฉ
+// ๅฏไปฅๆฏ ADC1/2/3
 
 
 

@@ -10,15 +10,15 @@
 //PA0
 #define DHT11_IO_IN()  {GPIOA->CRL&=0XFFFFFFF0;GPIOA->CRL|=8;}
 #define DHT11_IO_OUT() {GPIOA->CRL&=0XFFFFFFF0;GPIOA->CRL|=3;} 
-//IO²Ù×÷º¯Êı   
+//IOæ“ä½œå‡½æ•°   
 #define	DHT11_DQ_OUT(X)  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, X)
 #define	DHT11_DQ_IN  HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0)
 
-uint8_t DHT11_Init(void);//³õÊ¼»¯DHT11
-uint8_t DHT11_Read_Data(uint8_t *temp,uint8_t *humi);//¶ÁÈ¡Êı¾İ
-uint8_t DHT11_Read_Byte(void);//¶ÁÈ¡Ò»¸ö×Ö½Ú
-uint8_t DHT11_Read_Bit(void);//¶ÁÈ¡Ò»Î»
-uint8_t DHT11_Check(void);//¼ì²âDHT11
-void DHT11_Rst(void);//¸´Î»DHT11   
+uint8_t DHT11_Init(void);//åˆå§‹åŒ–DHT11
+uint8_t DHT11_Read_Data(uint8_t *temp,uint8_t *humi);//è¯»å–æ•°æ®
+uint8_t DHT11_Read_Byte(void);//è¯»å–ä¸€ä¸ªå­—èŠ‚
+uint8_t DHT11_Read_Bit(void);//è¯»å–ä¸€ä½
+uint8_t DHT11_Check(void);//æ£€æµ‹DHT11
+void DHT11_Rst(void);//å¤ä½DHT11   
 
 #endif

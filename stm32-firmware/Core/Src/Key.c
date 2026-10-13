@@ -12,13 +12,13 @@ extern Bump_Mode LastBump_mode ;
 extern uint8_t waterflag; 
 extern volatile uint32_t time_ms;
 
-extern volatile uint32_t hp_ms_total ;       // ±¾´Î¸ßÑ¹×ÜÊ±³¤
-extern volatile uint32_t hp_ms_count;      // ÒÑÔËÐÐÊ±³¤
-extern volatile uint8_t hp_running ;        // ÊÇ·ñÕýÔÚ¸ßÑ¹Ä£Ê½
-extern volatile uint8_t hp_is_on;          // µ±Ç°Ë®±Ã¿ª/¹Ø£¨0=¹Ø,1=¿ª£©
-extern volatile uint32_t hp_state_start ;   // µ±Ç°×´Ì¬¿ªÊ¼Ê±¿Ì
-extern uint32_t HP_ON_MS ;                 // ¸ßÑ¹¿ª 0.5s
-extern uint32_t HP_OFF_MS ;              // ¸ßÑ¹¹Ø 1.5s
+extern volatile uint32_t hp_ms_total ;       // æœ¬æ¬¡é«˜åŽ‹æ€»æ—¶é•¿
+extern volatile uint32_t hp_ms_count;      // å·²è¿è¡Œæ—¶é•¿
+extern volatile uint8_t hp_running ;        // æ˜¯å¦æ­£åœ¨é«˜åŽ‹æ¨¡å¼
+extern volatile uint8_t hp_is_on;          // å½“å‰æ°´æ³µå¼€/å…³ï¼ˆ0=å…³,1=å¼€ï¼‰
+extern volatile uint32_t hp_state_start ;   // å½“å‰çŠ¶æ€å¼€å§‹æ—¶åˆ»
+extern uint32_t HP_ON_MS ;                 // é«˜åŽ‹å¼€ 0.5s
+extern uint32_t HP_OFF_MS ;              // é«˜åŽ‹å…³ 1.5s
  
 extern System_Mode current_mode ;
 extern System_Mode last_mode ;
@@ -332,31 +332,31 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 				if(waterflag && CurrentBump_mode == Bump_AUTO)
 			{
 				watertime++;
-				if(watertime*10>time_ms)  // ¹à¸ÈÖ¸¶¨Ê±¼ä
+				if(watertime*10>time_ms)  // çŒæº‰æŒ‡å®šæ—¶é—´
 				{
 					time_ms = 0;
 					watertime = 0;
 					waterflag = 0;	
-					BUMP_OFF;  // ¹Ø±ÕË®±Ã
+					BUMP_OFF;  // å…³é—­æ°´æ³µ
 				}
 			}
 			
 			else	if (hp_running && CurrentBump_mode == Bump_CALIBRATION) {
-            hp_ms_count++; // ×ÜÊ±¼äÀÛ¼Æ
+            hp_ms_count++; // æ€»æ—¶é—´ç´¯è®¡
             
             uint32_t dur = HAL_GetTick() - hp_state_start;
             
             if (hp_is_on) {
-                // ÕýÔÚ¿ª£º¼ì²éÊÇ·ñµ½ 0.5s
+                // æ­£åœ¨å¼€ï¼šæ£€æŸ¥æ˜¯å¦åˆ° 0.5s
                 if (dur >= HP_ON_MS) {
                     BUMP_OFF;
                     hp_is_on = 0;
                     hp_state_start = HAL_GetTick();
                 }
             } else {
-                // ÕýÔÚ¹Ø£º¼ì²éÊÇ·ñµ½ 1.5s
+                // æ­£åœ¨å…³ï¼šæ£€æŸ¥æ˜¯å¦åˆ° 1.5s
                 if (dur >= HP_OFF_MS) {
-                    // ×ÜÊ±¼äÃ»µ½¾Í¼ÌÐøÏÂÒ»ÂÖ
+                    // æ€»æ—¶é—´æ²¡åˆ°å°±ç»§ç»­ä¸‹ä¸€è½®
                     if (hp_ms_count < hp_ms_total) {
                         BUMP_ON;
                         hp_is_on = 1;
@@ -365,7 +365,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
                 }
             }
             
-            // ¸ßÑ¹×ÜÊ±¼äµ½
+            // é«˜åŽ‹æ€»æ—¶é—´åˆ°
             if (hp_ms_count*10 >= hp_ms_total) {
                 hp_running = 0;
                 hp_ms_count = 0;

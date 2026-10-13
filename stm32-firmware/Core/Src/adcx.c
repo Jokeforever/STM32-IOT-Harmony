@@ -5,11 +5,11 @@ extern ADC_HandleTypeDef hadc1;
 
 //uint16_t ADC_GetValue(uint8_t ADC_Channel,uint8_t ADC_SampleTime)
 //{
-//	//ÅäÖÃADCÍ¨µÀ
+//	//é…ç½®ADCé€šé“
 //	ADC_RegularChannelConfig(ADCx, ADC_Channel, 1, ADC_SampleTime);
 //	
-//	ADC_SoftwareStartConvCmd(ADCx, ENABLE); //Èí¼ş´¥·¢ADC×ª»»
-//	while(ADC_GetFlagStatus(ADCx, ADC_FLAG_EOC) == RESET); //¶ÁÈ¡ADC×ª»»Íê³É±êÖ¾Î»
+//	ADC_SoftwareStartConvCmd(ADCx, ENABLE); //è½¯ä»¶è§¦å‘ADCè½¬æ¢
+//	while(ADC_GetFlagStatus(ADCx, ADC_FLAG_EOC) == RESET); //è¯»å–ADCè½¬æ¢å®Œæˆæ ‡å¿—ä½
 //	return ADC_GetConversionValue(ADCx);
 //}
 

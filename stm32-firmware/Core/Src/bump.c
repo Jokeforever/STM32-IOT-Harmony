@@ -1,15 +1,15 @@
 /*
  * MODULE OVERVIEW
- * ÎÄ¼ş£ºbump.c
- * ×÷ÓÃ£ºË®±Ã¹Ø±Õ¡¢ÊÖ¶¯Ğ£×¼ºÍ×Ô¶¯¹à¸È¿ØÖÆ¡£
- * ¹Ø¼üº¯Êı£º
- *   BUMP_Init()        ³õÊ¼»¯ãĞÖµ²¢Ä¬ÈÏ¹Ø±ÕË®±Ã
- *   Bump_Control()     ¸ù¾İÄ£Ê½Ö´ĞĞË®±Ã¿ØÖÆ
- *   Bump_Set()         ĞŞ¸ÄË®±ÃÄ£Ê½
- *   Calculate_Water_Volume() ¸ù¾İÍÁÈÀÊª¶È¹ÀËãË®Á¿
- * ×¢Òâ£º
- *   Ê×´ÎÉÏµçÄ¬ÈÏ Bump_OFF£¬±ÜÃâ×Ô¶¯¹à¸ÈÎóÆô¶¯¡£
- *   Ä£Ê½±ä»¯ºó»á´¥·¢ Config_MarkDirty() ±£´æµ½ EEPROM¡£
+ * æ–‡ä»¶ï¼šbump.c
+ * ä½œç”¨ï¼šæ°´æ³µå…³é—­ã€æ‰‹åŠ¨æ ¡å‡†å’Œè‡ªåŠ¨çŒæº‰æ§åˆ¶ã€‚
+ * å…³é”®å‡½æ•°ï¼š
+ *   BUMP_Init()        åˆå§‹åŒ–é˜ˆå€¼å¹¶é»˜è®¤å…³é—­æ°´æ³µ
+ *   Bump_Control()     æ ¹æ®æ¨¡å¼æ‰§è¡Œæ°´æ³µæ§åˆ¶
+ *   Bump_Set()         ä¿®æ”¹æ°´æ³µæ¨¡å¼
+ *   Calculate_Water_Volume() æ ¹æ®åœŸå£¤æ¹¿åº¦ä¼°ç®—æ°´é‡
+ * æ³¨æ„ï¼š
+ *   é¦–æ¬¡ä¸Šç”µé»˜è®¤ Bump_OFFï¼Œé¿å…è‡ªåŠ¨çŒæº‰è¯¯å¯åŠ¨ã€‚
+ *   æ¨¡å¼å˜åŒ–åä¼šè§¦å‘ Config_MarkDirty() ä¿å­˜åˆ° EEPROMã€‚
  */
   #include "bump.h"
 
@@ -39,30 +39,30 @@ float Calculate_Water_Volume(uint16_t current_humi)
 {
     if (current_humi >= Bump_threhold[1])
 		{
-        return 0.0f;  // ÍÁÈÀÊªÈó£¬ÎŞĞè¹à¸È
+        return 0.0f;  // åœŸå£¤æ¹¿æ¶¦ï¼Œæ— éœ€çŒæº‰
     } 
 		else if (current_humi < Bump_threhold[0]) 
 		{
-        // ¸ÉºµÊ±°´×î´ó²îÖµ¼ÆËã
+        // å¹²æ—±æ—¶æŒ‰æœ€å¤§å·®å€¼è®¡ç®—
         float diff = Bump_threhold[1] - Bump_threhold[0];
-        return AREA * diff * WATER_DEPTH * WATER_DENSITY / 100.0f;  // ×ª»»ÎªÉı£¨¼ÙÉèdiffµ¥Î»Îª%£¬Ğèµ÷Õû£©
+        return AREA * diff * WATER_DEPTH * WATER_DENSITY / 100.0f;  // è½¬æ¢ä¸ºå‡ï¼ˆå‡è®¾diffå•ä½ä¸º%ï¼Œéœ€è°ƒæ•´ï¼‰
     } 
 		else 
 		{
-        // ½éÓÚÁ½ÕßÖ®¼ä£¬ÏßĞÔ²åÖµ
+        // ä»‹äºä¸¤è€…ä¹‹é—´ï¼Œçº¿æ€§æ’å€¼
         float diff = Bump_threhold[1] - current_humi;
         return AREA * diff * WATER_DEPTH * WATER_DENSITY / 100.0f;
     }
    
 }
 
-volatile uint32_t hp_ms_total = 0;       // ±¾´Î¸ßÑ¹×ÜÊ±³¤
-volatile uint32_t hp_ms_count = 0;      // ÒÑÔËĞĞÊ±³¤
-volatile uint8_t hp_running = 0;        // ÊÇ·ñÕıÔÚ¸ßÑ¹Ä£Ê½
-volatile uint8_t hp_is_on = 0;          // µ±Ç°Ë®±Ã¿ª/¹Ø£¨0=¹Ø,1=¿ª£©
-volatile uint32_t hp_state_start = 0;   // µ±Ç°×´Ì¬¿ªÊ¼Ê±¿Ì
-uint32_t HP_ON_MS = 500;                 // ¸ßÑ¹¿ª 0.5s
-uint32_t HP_OFF_MS = 1500;              // ¸ßÑ¹¹Ø 1.5s
+volatile uint32_t hp_ms_total = 0;       // æœ¬æ¬¡é«˜å‹æ€»æ—¶é•¿
+volatile uint32_t hp_ms_count = 0;      // å·²è¿è¡Œæ—¶é•¿
+volatile uint8_t hp_running = 0;        // æ˜¯å¦æ­£åœ¨é«˜å‹æ¨¡å¼
+volatile uint8_t hp_is_on = 0;          // å½“å‰æ°´æ³µå¼€/å…³ï¼ˆ0=å…³,1=å¼€ï¼‰
+volatile uint32_t hp_state_start = 0;   // å½“å‰çŠ¶æ€å¼€å§‹æ—¶åˆ»
+uint32_t HP_ON_MS = 500;                 // é«˜å‹å¼€ 0.5s
+uint32_t HP_OFF_MS = 1500;              // é«˜å‹å…³ 1.5s
 
 void Irrigation_Control(void) 
 	{	
@@ -76,15 +76,15 @@ void Irrigation_Control(void)
     }
     if (water_vol <= 0)
 		{
-        BUMP_OFF;  // ÎŞĞè¹à¸È£¬¹Ø±ÕË®±Ã
+        BUMP_OFF;  // æ— éœ€çŒæº‰ï¼Œå…³é—­æ°´æ³µ
         return;
     }
-    // ¼ÆËã¹à¸ÈÊ±¼ä£¨¼ÙÉèË®±ÃÁ÷Á¿ÎªFLOW_RATE L/min£©
+    // è®¡ç®—çŒæº‰æ—¶é—´ï¼ˆå‡è®¾æ°´æ³µæµé‡ä¸ºFLOW_RATE L/minï¼‰
      time_min = water_vol / FLOW_RATE;
-     time_ms = (uint32_t)(time_min * 60000.0f);  // ×ª»»ÎªºÁÃë
+     time_ms = (uint32_t)(time_min * 60000.0f);  // è½¬æ¢ä¸ºæ¯«ç§’
     
 		waterflag = 1;
-		BUMP_ON;  // ¿ªÆôË®±Ã
+		BUMP_ON;  // å¼€å¯æ°´æ³µ
 	
 }
 	
@@ -104,14 +104,14 @@ void Start_HighPressure_Irrigation(void)
     }
     if (water_vol <= 0)
 		{
-        BUMP_OFF;  // ÎŞĞè¹à¸È£¬¹Ø±ÕË®±Ã
+        BUMP_OFF;  // æ— éœ€çŒæº‰ï¼Œå…³é—­æ°´æ³µ
         return;
     }
 		
     hp_ms_total = (uint32_t)(water_vol / FLOW_RATE * 60000.0f);
     hp_running = 1;
     
-    // µÚÒ»¶Î£º¿ª±Ã
+    // ç¬¬ä¸€æ®µï¼šå¼€æ³µ
     BUMP_ON;
     hp_is_on = 1;
     hp_state_start = HAL_GetTick();

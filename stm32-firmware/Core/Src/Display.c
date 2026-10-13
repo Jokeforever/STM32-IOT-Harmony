@@ -15,13 +15,13 @@ void Display1_Init(void)
 {
 	
 	
-	OLED_ShowCHinese(0,0,1);//Œ¬    
-	OLED_ShowCHinese(18,0,2);//∂»     
-	OLED_ShowCHinese(96,0,3);//°Ê  
+	OLED_ShowCHinese(0,0,1);//Ê∏©    
+	OLED_ShowCHinese(18,0,2);//Â∫¶     
+	OLED_ShowCHinese(96,0,3);//‚ÑÉ  
 
 	                                
-	OLED_ShowCHinese(0,3,4);// ™    
-	OLED_ShowCHinese(18,3,5);//∂»   
+	OLED_ShowCHinese(0,3,4);//Êπø    
+	OLED_ShowCHinese(18,3,5);//Â∫¶   
 	OLED_ShowString(96,3,(uint8_t*)"%",16);//%
 	
 	OLED_ShowString(0,6,(uint8_t*)"CO2",16);
@@ -31,8 +31,8 @@ void Display1_Init(void)
 
 void Display2_Init(void)
 {
-	OLED_ShowCHinese(0,0,6);//π‚  
-	OLED_ShowCHinese(18,0,7);//«ø
+	OLED_ShowCHinese(0,0,6);//ÂÖâ  
+	OLED_ShowCHinese(18,0,7);//Âº∫
 	OLED_ShowString(80,0,(uint8_t*)"Lux",16);//Lux
 	
 	OLED_ShowString(0,3,(uint8_t*)"LEDMode:",16);
@@ -44,19 +44,19 @@ void Display3_Init(void)
 {
 
 	
-	OLED_ShowCHinese(0,0,16);//Õ¡  
-	OLED_ShowCHinese(18,0,17);//»¿
-	OLED_ShowCHinese(36,0,4);// ™ 
-	OLED_ShowCHinese(54,0,5);//∂»
+	OLED_ShowCHinese(0,0,16);//Âúü  
+	OLED_ShowCHinese(18,0,17);//Â£§
+	OLED_ShowCHinese(36,0,4);//Êπø 
+	OLED_ShowCHinese(54,0,5);//Â∫¶
 	OLED_ShowString(112,0,(uint8_t*)"%",16);//%
 	
-	OLED_ShowCHinese(0,3,14);//ÀÆ
-	OLED_ShowCHinese(18,3,15);//±√
+	OLED_ShowCHinese(0,3,14);//Ê∞¥
+	OLED_ShowCHinese(18,3,15);//Ê≥µ
 	OLED_ShowCHinese(36,3,0);//:
 	
 	
-	OLED_ShowCHinese(0,6,14);//ÀÆ
-	OLED_ShowCHinese(18,6,20);//¡ø
+	OLED_ShowCHinese(0,6,14);//Ê∞¥
+	OLED_ShowCHinese(18,6,20);//Èáè
 
 }
 
@@ -74,7 +74,7 @@ void Display5_Init(void)
 
 }
 
-// ˝æ›À¢–¬œ‘ æ1£¨2
+//Êï∞ÊçÆÂà∑Êñ∞ÊòæÁ§∫1Ôºå2
 void Refresh1_Data(void)
 {
 		char buf1[10];
@@ -171,7 +171,7 @@ void Display_Data(void)
 								Refresh5_Data();
 								break;
             default:
-                // Œﬁœ‘ æ◊¥Ã¨
+                // Êó†ÊòæÁ§∫Áä∂ÊÄÅ
 						OLED_ShowCHinese(50,0,28);// 
 						OLED_ShowCHinese(66,0,29);// 
 						OLED_ShowCHinese(0,3,21);// 

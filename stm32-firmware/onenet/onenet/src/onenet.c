@@ -1,52 +1,52 @@
 /*
  * MODULE OVERVIEW
- * ÎÄ¼ş£ºonenet.c
- * ×÷ÓÃ£ºOneNET MQTT ¼øÈ¨¡¢ÊôĞÔÉÏ±¨¡¢ÊôĞÔÏÂ·¢ºÍ set_reply¡£
- * ¹Ø¼üº¯Êı£º
- *   OneNet_DevLink()    MQTT µÇÂ¼
- *   OneNet_FillBuf()    ×é×° OneJSON ÊôĞÔ
- *   OneNet_RevPro()     ´¦Àí property/set ÏÂ·¢
- * ×¢Òâ£º
- *   led¡¢bump¡¢ãĞÖµºÍ PID ²ÎÊı±ä»¯ºó»á´¥·¢ EEPROM ±£´æ¡£
- *   sensor_status Ö»ÉÏ±¨ DHT11 ºÍ CO2 µÄÓĞĞ§ĞÔ¡£
+ * æ–‡ä»¶ï¼šonenet.c
+ * ä½œç”¨ï¼šOneNET MQTT é‰´æƒã€å±æ€§ä¸ŠæŠ¥ã€å±æ€§ä¸‹å‘å’Œ set_replyã€‚
+ * å…³é”®å‡½æ•°ï¼š
+ *   OneNet_DevLink()    MQTT ç™»å½•
+ *   OneNet_FillBuf()    ç»„è£… OneJSON å±æ€§
+ *   OneNet_RevPro()     å¤„ç† property/set ä¸‹å‘
+ * æ³¨æ„ï¼š
+ *   ledã€bumpã€é˜ˆå€¼å’Œ PID å‚æ•°å˜åŒ–åä¼šè§¦å‘ EEPROM ä¿å­˜ã€‚
+ *   sensor_status åªä¸ŠæŠ¥ DHT11 å’Œ CO2 çš„æœ‰æ•ˆæ€§ã€‚
  */
 /**
 	************************************************************
 	************************************************************
 	************************************************************
-	*	ÎÄ¼şÃû£º 	onenet.c
+	*	æ–‡ä»¶åï¼š 	onenet.c
 	*
-	*	×÷Õß£º 		ÕÅ¼ÌÈğ
+	*	ä½œè€…ï¼š 		å¼ ç»§ç‘
 	*
-	*	ÈÕÆÚ£º 		2017-05-08
+	*	æ—¥æœŸï¼š 		2017-05-08
 	*
-	*	°æ±¾£º 		V1.1
+	*	ç‰ˆæœ¬ï¼š 		V1.1
 	*
-	*	ËµÃ÷£º 		ÓëonenetÆ½Ì¨µÄÊı¾İ½»»¥½Ó¿Ú²ã
+	*	è¯´æ˜ï¼š 		ä¸onenetå¹³å°çš„æ•°æ®äº¤äº’æ¥å£å±‚
 	*
-	*	ĞŞ¸Ä¼ÇÂ¼£º	V1.0£ºĞ­Òé·â×°¡¢·µ»ØÅĞ¶Ï¶¼ÔÚÍ¬Ò»¸öÎÄ¼ş£¬²¢ÇÒ²»Í¬Ğ­Òé½Ó¿Ú²»Í¬¡£
-	*				V1.1£ºÌá¹©Í³Ò»½Ó¿Ú¹©Ó¦ÓÃ²ãÊ¹ÓÃ£¬¸ù¾İ²»Í¬Ğ­ÒéÎÄ¼şÀ´·â×°Ğ­ÒéÏà¹ØµÄÄÚÈİ¡£
+	*	ä¿®æ”¹è®°å½•ï¼š	V1.0ï¼šåè®®å°è£…ã€è¿”å›åˆ¤æ–­éƒ½åœ¨åŒä¸€ä¸ªæ–‡ä»¶ï¼Œå¹¶ä¸”ä¸åŒåè®®æ¥å£ä¸åŒã€‚
+	*				V1.1ï¼šæä¾›ç»Ÿä¸€æ¥å£ä¾›åº”ç”¨å±‚ä½¿ç”¨ï¼Œæ ¹æ®ä¸åŒåè®®æ–‡ä»¶æ¥å°è£…åè®®ç›¸å…³çš„å†…å®¹ã€‚
 	************************************************************
 	************************************************************
 	************************************************************
 **/
 
-//µ¥Æ¬»úÍ·ÎÄ¼ş
+//å•ç‰‡æœºå¤´æ–‡ä»¶
 #include "stm32f1xx_hal.h"
 
-//ÍøÂçÉè±¸
+//ç½‘ç»œè®¾å¤‡
 #include "esp8266.h"
 
-//Ğ­ÒéÎÄ¼ş
+//åè®®æ–‡ä»¶
 #include "onenet.h"
 #include "mqttkit.h"
 #include "cJSON.h"
 
-//Ëã·¨
+//ç®—æ³•
 #include "base64.h"
 #include "hmac_sha1.h"
 
-//Ó²¼şÇı¶¯
+//ç¡¬ä»¶é©±åŠ¨
 #include "usart.h"
 #include "myusart.h"
 //#include "sht20.h"
@@ -54,7 +54,7 @@
 #include "bump.h"
 #include "oled.h"
 #include "delay.h"
-//C¿â
+//Cåº“
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -84,16 +84,16 @@ extern unsigned char esp8266_buf[512];
 
 /*
 ************************************************************
-*	º¯ÊıÃû³Æ£º	OTA_UrlEncode
+*	å‡½æ•°åç§°ï¼š	OTA_UrlEncode
 *
-*	º¯Êı¹¦ÄÜ£º	signĞèÒª½øĞĞURL±àÂë
+*	å‡½æ•°åŠŸèƒ½ï¼š	signéœ€è¦è¿›è¡ŒURLç¼–ç 
 *
-*	Èë¿Ú²ÎÊı£º	sign£º¼ÓÃÜ½á¹û
+*	å…¥å£å‚æ•°ï¼š	signï¼šåŠ å¯†ç»“æœ
 *
-*	·µ»Ø²ÎÊı£º	0-³É¹¦	ÆäËû-Ê§°Ü
+*	è¿”å›å‚æ•°ï¼š	0-æˆåŠŸ	å…¶ä»–-å¤±è´¥
 *
-*	ËµÃ÷£º		+			%2B
-*				¿Õ¸ñ		%20
+*	è¯´æ˜ï¼š		+			%2B
+*				ç©ºæ ¼		%20
 *				/			%2F
 *				?			%3F
 *				%			%25
@@ -169,21 +169,21 @@ static unsigned char OTA_UrlEncode(char *sign)
 
 /*
 ************************************************************
-*	º¯ÊıÃû³Æ£º	OTA_Authorization
+*	å‡½æ•°åç§°ï¼š	OTA_Authorization
 *
-*	º¯Êı¹¦ÄÜ£º	¼ÆËãAuthorization
+*	å‡½æ•°åŠŸèƒ½ï¼š	è®¡ç®—Authorization
 *
-*	Èë¿Ú²ÎÊı£º	ver£º²ÎÊı×é°æ±¾ºÅ£¬ÈÕÆÚ¸ñÊ½£¬Ä¿Ç°½öÖ§³Ö¸ñÊ½"2018-10-31"
-*				res£º²úÆ·id
-*				et£º¹ıÆÚÊ±¼ä£¬UTCÃëÖµ
-*				access_key£º·ÃÎÊÃÜÔ¿
-*				dev_name£ºÉè±¸Ãû
-*				authorization_buf£º»º´ætokenµÄÖ¸Õë
-*				authorization_buf_len£º»º´æÇø³¤¶È(×Ö½Ú)
+*	å…¥å£å‚æ•°ï¼š	verï¼šå‚æ•°ç»„ç‰ˆæœ¬å·ï¼Œæ—¥æœŸæ ¼å¼ï¼Œç›®å‰ä»…æ”¯æŒæ ¼å¼"2018-10-31"
+*				resï¼šäº§å“id
+*				etï¼šè¿‡æœŸæ—¶é—´ï¼ŒUTCç§’å€¼
+*				access_keyï¼šè®¿é—®å¯†é’¥
+*				dev_nameï¼šè®¾å¤‡å
+*				authorization_bufï¼šç¼“å­˜tokençš„æŒ‡é’ˆ
+*				authorization_buf_lenï¼šç¼“å­˜åŒºé•¿åº¦(å­—èŠ‚)
 *
-*	·µ»Ø²ÎÊı£º	0-³É¹¦	ÆäËû-Ê§°Ü
+*	è¿”å›å‚æ•°ï¼š	0-æˆåŠŸ	å…¶ä»–-å¤±è´¥
 *
-*	ËµÃ÷£º		µ±Ç°½öÖ§³Ösha1
+*	è¯´æ˜ï¼š		å½“å‰ä»…æ”¯æŒsha1
 ************************************************************
 */
 #define METHOD		"sha1"
@@ -194,18 +194,18 @@ static unsigned char OTA_UrlEncode(char *sign)
 //	size_t olen = 0;
 	size_t key_len = 0;
 //	
-//	char sign_buf[64];								//±£´æÇ©ÃûµÄBase64±àÂë½á¹û ºÍ URL±àÂë½á¹û
-//	char hmac_sha1_buf[64];							//±£´æÇ©Ãû
-//	char access_key_base64[64];						//±£´æaccess_keyµÄBase64±àÂë½áºÏ
-//	char string_for_signature[72];					//±£´æstring_for_signature£¬Õâ¸öÊÇ¼ÓÃÜµÄkey
+//	char sign_buf[64];								//ä¿å­˜ç­¾åçš„Base64ç¼–ç ç»“æœ å’Œ URLç¼–ç ç»“æœ
+//	char hmac_sha1_buf[64];							//ä¿å­˜ç­¾å
+//	char access_key_base64[64];						//ä¿å­˜access_keyçš„Base64ç¼–ç ç»“åˆ
+//	char string_for_signature[72];					//ä¿å­˜string_for_signatureï¼Œè¿™ä¸ªæ˜¯åŠ å¯†çš„key
 
 
-////----------------------------------------------------²ÎÊıºÏ·¨ĞÔ--------------------------------------------------------------------
+////----------------------------------------------------å‚æ•°åˆæ³•æ€§--------------------------------------------------------------------
 //	if(ver == (void *)0 || res == (void *)0 || et < 1564562581 || access_key == (void *)0
 //		|| authorization_buf == (void *)0 || authorization_buf_len < 120)
 //		return 1;
 //	
-////----------------------------------------------------½«access_key½øĞĞBase64½âÂë----------------------------------------------------
+////----------------------------------------------------å°†access_keyè¿›è¡ŒBase64è§£ç ----------------------------------------------------
 //	memset(access_key_base64, 0, sizeof(access_key_base64));
 //	
 //	BASE64_Decode((unsigned char *)access_key_base64, sizeof(access_key_base64), &key_len, (unsigned char *)access_key, strlen(access_key));
@@ -213,7 +213,7 @@ static unsigned char OTA_UrlEncode(char *sign)
 //															OLED_Clear();
 //	OLED_ShowString(0,0," 2",16);
 //	
-////----------------------------------------------------¼ÆËãstring_for_signature-----------------------------------------------------
+////----------------------------------------------------è®¡ç®—string_for_signature-----------------------------------------------------
 //	memset(string_for_signature, 0, sizeof(string_for_signature));
 //	if(flag)
 //		snprintf(string_for_signature, sizeof(string_for_signature), "%d\n%s\nproducts/%s\n%s", et, METHOD, res, ver);
@@ -221,7 +221,7 @@ static unsigned char OTA_UrlEncode(char *sign)
 //		snprintf(string_for_signature, sizeof(string_for_signature), "%d\n%s\nproducts/%s/devices/%s\n%s", et, METHOD, res, dev_name, ver);
 //	//UsartPrintf(USART_DEBUG, "string_for_signature: %s\r\n", string_for_signature);
 //	
-////----------------------------------------------------¼ÓÃÜ-------------------------------------------------------------------------
+////----------------------------------------------------åŠ å¯†-------------------------------------------------------------------------
 //	memset(hmac_sha1_buf, 0, sizeof(hmac_sha1_buf));
 
 //	hmac_sha1((unsigned char *)access_key_base64, key_len,
@@ -232,19 +232,19 @@ static unsigned char OTA_UrlEncode(char *sign)
 //	UsartPrintf(USART_DEBUG, "hmac_sha1_buf: %s\r\n", hmac_sha1_buf);
 
 
-////----------------------------------------------------½«¼ÓÃÜ½á¹û½øĞĞBase64±àÂë------------------------------------------------------
+////----------------------------------------------------å°†åŠ å¯†ç»“æœè¿›è¡ŒBase64ç¼–ç ------------------------------------------------------
 //	olen = 0;
 //	memset(sign_buf, 0, sizeof(sign_buf));
 
 //	
 //	BASE64_Encode((unsigned char *)sign_buf, sizeof(sign_buf), &olen, (unsigned char *)hmac_sha1_buf, HMAC_SHA1_SIZE);
 
-////----------------------------------------------------½«Base64±àÂë½á¹û½øĞĞURL±àÂë---------------------------------------------------
+////----------------------------------------------------å°†Base64ç¼–ç ç»“æœè¿›è¡ŒURLç¼–ç ---------------------------------------------------
 //	OTA_UrlEncode(sign_buf);
 //	UsartPrintf(USART_DEBUG, "sign_buf: %s\r\n", sign_buf);
 
 //	
-////----------------------------------------------------¼ÆËãToken--------------------------------------------------------------------
+////----------------------------------------------------è®¡ç®—Token--------------------------------------------------------------------
 //	if(flag)
 //		snprintf(authorization_buf, authorization_buf_len, "version=%s&res=products%%2F%s&et=%d&method=%s&sign=%s", ver, res, et, METHOD, sign_buf);
 //	else
@@ -261,22 +261,22 @@ static unsigned char OneNET_Authorization(char *ver, char *res, unsigned int et,
 	size_t olen = 0;
 	size_t key_len = 0;
 	
-	char sign_buf[64];								//ä¿å­˜ç­¾åçš„Base64ç¼–ç ç»“æœ å’?URLç¼–ç ç»“æœ
-	char hmac_sha1_buf[64];							//ä¿å­˜ç­¾å
-	char access_key_base64[64];						//ä¿å­˜access_keyçš„Base64ç¼–ç ç»“åˆ
-	char string_for_signature[72];					//ä¿å­˜string_for_signatureï¼Œè¿™ä¸ªæ˜¯åŠ å¯†çš„key
+	char sign_buf[64];								//æ·‡æ¿†ç“¨ç»›æƒ§æ‚•é¨å‡šase64ç¼‚æ «çˆœç¼æ’´ç‰ éœ?URLç¼‚æ «çˆœç¼æ’´ç‰
+	char hmac_sha1_buf[64];							//æ·‡æ¿†ç“¨ç»›æƒ§æ‚•
+	char access_key_base64[64];						//æ·‡æ¿†ç“¨access_keyé¨å‡šase64ç¼‚æ «çˆœç¼æ’³æ‚
+	char string_for_signature[72];					//æ·‡æ¿†ç“¨string_for_signatureé”›å²ƒç¹–æ¶“î…æ§¸é”çŠ²ç˜‘é¨åˆ±ey
 
-//----------------------------------------------------å‚æ•°åˆæ³•æ€?-------------------------------------------------------------------
+//----------------------------------------------------é™å‚›æšŸéšå Ÿç¡¶é¬?-------------------------------------------------------------------
 	if(ver == (void *)0 || res == (void *)0 || et < 1564562581 || access_key == (void *)0
 		|| authorization_buf == (void *)0 || authorization_buf_len < 120)
 		return 1;
 	
-//----------------------------------------------------å°†access_keyè¿›è¡ŒBase64è§£ç ----------------------------------------------------
+//----------------------------------------------------çå“¸ccess_keyæ©æ¶œî”‘Base64ç‘™ï½‡çˆœ----------------------------------------------------
 	memset(access_key_base64, 0, sizeof(access_key_base64));
 	BASE64_Decode((unsigned char *)access_key_base64, sizeof(access_key_base64), &key_len, (unsigned char *)access_key, strlen(access_key));
 //	printf("access_key_base64: %s\r\n", access_key_base64);
 															
-//----------------------------------------------------è®¡ç®—string_for_signature-----------------------------------------------------
+//----------------------------------------------------ç’ï¼„ç•»string_for_signature-----------------------------------------------------
 	memset(string_for_signature, 0, sizeof(string_for_signature));
 	if(flag)
 		snprintf(string_for_signature, sizeof(string_for_signature), "%d\n%s\nproducts/%s\n%s", et, METHOD, res, ver);
@@ -284,7 +284,7 @@ static unsigned char OneNET_Authorization(char *ver, char *res, unsigned int et,
 		snprintf(string_for_signature, sizeof(string_for_signature), "%d\n%s\nproducts/%s/devices/%s\n%s", et, METHOD, res, dev_name, ver);
 //	printf("string_for_signature: %s\r\n", string_for_signature);
 	
-//----------------------------------------------------åŠ å¯†-------------------------------------------------------------------------
+//----------------------------------------------------é”çŠ²ç˜‘-------------------------------------------------------------------------
 	memset(hmac_sha1_buf, 0, sizeof(hmac_sha1_buf));
 	
 	hmac_sha1((unsigned char *)access_key_base64, key_len,
@@ -293,17 +293,17 @@ static unsigned char OneNET_Authorization(char *ver, char *res, unsigned int et,
 
 //	printf("hmac_sha1_buf: %s\r\n", hmac_sha1_buf);
 	
-//----------------------------------------------------å°†åŠ å¯†ç»“æœè¿›è¡ŒBase64ç¼–ç ------------------------------------------------------
+//----------------------------------------------------çå——å§ç€µå—™ç²¨é‹æ»†ç¹˜ç›å­Šase64ç¼‚æ «çˆœ------------------------------------------------------
 	olen = 0;
 	memset(sign_buf, 0, sizeof(sign_buf));
 	BASE64_Encode((unsigned char *)sign_buf, sizeof(sign_buf), &olen, (unsigned char *)hmac_sha1_buf, HMAC_SHA1_SIZE);
 	
-//----------------------------------------------------å°†Base64ç¼–ç ç»“æœè¿›è¡ŒURLç¼–ç ---------------------------------------------------
+//----------------------------------------------------çå’®ase64ç¼‚æ «çˆœç¼æ’´ç‰æ©æ¶œî”‘URLç¼‚æ «çˆœ---------------------------------------------------
 	OTA_UrlEncode(sign_buf);
 			
 //	printf("sign_buf: %s\r\n", sign_buf);
 	
-//----------------------------------------------------è®¡ç®—Token--------------------------------------------------------------------
+//----------------------------------------------------ç’ï¼„ç•»Token--------------------------------------------------------------------
 	if(flag)
 		snprintf(authorization_buf, authorization_buf_len, "version=%s&res=products%%2F%s&et=%d&method=%s&sign=%s", ver, res, et, METHOD, sign_buf);
 	else
@@ -317,19 +317,19 @@ static unsigned char OneNET_Authorization(char *ver, char *res, unsigned int et,
 }
 
 //==========================================================
-//	º¯ÊıÃû³Æ£º	OneNET_RegisterDevice
+//	å‡½æ•°åç§°ï¼š	OneNET_RegisterDevice
 //
-//	º¯Êı¹¦ÄÜ£º	ÔÚ²úÆ·ÖĞ×¢²áÒ»¸öÉè±¸
+//	å‡½æ•°åŠŸèƒ½ï¼š	åœ¨äº§å“ä¸­æ³¨å†Œä¸€ä¸ªè®¾å¤‡
 //
-//	Èë¿Ú²ÎÊı£º	access_key£º·ÃÎÊÃÜÔ¿
-//				pro_id£º²úÆ·ID
-//				serial£ºÎ¨Ò»Éè±¸ºÅ
-//				devid£º±£´æ·µ»ØµÄdevid
-//				key£º±£´æ·µ»ØµÄkey
+//	å…¥å£å‚æ•°ï¼š	access_keyï¼šè®¿é—®å¯†é’¥
+//				pro_idï¼šäº§å“ID
+//				serialï¼šå”¯ä¸€è®¾å¤‡å·
+//				devidï¼šä¿å­˜è¿”å›çš„devid
+//				keyï¼šä¿å­˜è¿”å›çš„key
 //
-//	·µ»Ø²ÎÊı£º	0-³É¹¦		1-Ê§°Ü
+//	è¿”å›å‚æ•°ï¼š	0-æˆåŠŸ		1-å¤±è´¥
 //
-//	ËµÃ÷£º		
+//	è¯´æ˜ï¼š		
 //==========================================================
 _Bool OneNET_RegisterDevice(void)
 {
@@ -338,7 +338,7 @@ _Bool OneNET_RegisterDevice(void)
 	unsigned short send_len = 11 + strlen(DEVICE_NAME);
 	char *send_ptr = NULL, *data_ptr = NULL;
 	
-	char authorization_buf[144];													//¼ÓÃÜµÄkey
+	char authorization_buf[144];													//åŠ å¯†çš„key
 	
 	send_ptr = malloc(send_len + 240);
 	if(send_ptr == NULL)
@@ -377,7 +377,7 @@ _Bool OneNET_RegisterDevice(void)
 	}
 	*/
 	
-	data_ptr = (char *)ESP8266_GetIPD(250);							//µÈ´ıÆ½Ì¨ÏìÓ¦
+	data_ptr = (char *)ESP8266_GetIPD(250);							//ç­‰å¾…å¹³å°å“åº”
 	
 	if(data_ptr)
 	{
@@ -404,20 +404,20 @@ _Bool OneNET_RegisterDevice(void)
 }
 
 //==========================================================
-//	º¯ÊıÃû³Æ£º	OneNet_DevLink
+//	å‡½æ•°åç§°ï¼š	OneNet_DevLink
 //
-//	º¯Êı¹¦ÄÜ£º	Óëonenet´´½¨Á¬½Ó
+//	å‡½æ•°åŠŸèƒ½ï¼š	ä¸onenetåˆ›å»ºè¿æ¥
 //
-//	Èë¿Ú²ÎÊı£º	ÎŞ
+//	å…¥å£å‚æ•°ï¼š	æ— 
 //
-//	·µ»Ø²ÎÊı£º	1-³É¹¦	0-Ê§°Ü
+//	è¿”å›å‚æ•°ï¼š	1-æˆåŠŸ	0-å¤±è´¥
 //
-//	ËµÃ÷£º		ÓëonenetÆ½Ì¨½¨Á¢Á¬½Ó
+//	è¯´æ˜ï¼š		ä¸onenetå¹³å°å»ºç«‹è¿æ¥
 //==========================================================
 _Bool OneNet_DevLink(void)
 {
 	
-	MQTT_PACKET_STRUCTURE mqttPacket = {NULL, 0, 0, 0};					//Ğ­Òé°ü
+	MQTT_PACKET_STRUCTURE mqttPacket = {NULL, 0, 0, 0};					//åè®®åŒ…
 
 	unsigned char *dataPtr;
 	
@@ -435,9 +435,9 @@ _Bool OneNet_DevLink(void)
 	if(MQTT_PacketConnect(PROID, authorization_buf, DEVICE_NAME, 256, 1, MQTT_QOS_LEVEL0, NULL, NULL, 0, &mqttPacket) == 0)
 	{
 
-		ESP8266_SendData(mqttPacket._data, mqttPacket._len);			//ÉÏ´«Æ½Ì¨
+		ESP8266_SendData(mqttPacket._data, mqttPacket._len);			//ä¸Šä¼ å¹³å°
 	
-		dataPtr = ESP8266_GetIPD(250);									//µÈ´ıÆ½Ì¨ÏìÓ¦
+		dataPtr = ESP8266_GetIPD(250);									//ç­‰å¾…å¹³å°å“åº”
 		
 
 		if(dataPtr != NULL)
@@ -455,20 +455,20 @@ _Bool OneNet_DevLink(void)
 					case 5:;break;
 					
 					default:;break;
-//					case 0:UsartPrintf(USART_DEBUG, "Tips:	è¿æ¥æˆåŠŸ\r\n");status = 0;break;
+//					case 0:UsartPrintf(USART_DEBUG, "Tips:	æ©ç‚´å¸´é´æ„¬å§›\r\n");status = 0;break;
 //					
-//					case 1:UsartPrintf(USART_DEBUG, "WARN:	è¿æ¥å¤±è´¥ï¼šåè®®é”™è¯¯\r\n");break;
-//					case 2:UsartPrintf(USART_DEBUG, "WARN:	è¿æ¥å¤±è´¥ï¼šéæ³•çš„clientid\r\n");break;
-//					case 3:UsartPrintf(USART_DEBUG, "WARN:	è¿æ¥å¤±è´¥ï¼šæœåŠ¡å™¨å¤±è´¥\r\n");break;
-//					case 4:UsartPrintf(USART_DEBUG, "WARN:	è¿æ¥å¤±è´¥ï¼šç”¨æˆ·åæˆ–å¯†ç é”™è¯¯\r\n");break;
-//					case 5:UsartPrintf(USART_DEBUG, "WARN:	è¿æ¥å¤±è´¥ï¼šéæ³•é“¾æ?æ¯”å¦‚tokenéæ³•)\r\n");break;
+//					case 1:UsartPrintf(USART_DEBUG, "WARN:	æ©ç‚´å¸´æ¾¶è¾«è§¦é”›æ°¬å´—ç’î‡€æ•Šç’‡ç—‹r\n");break;
+//					case 2:UsartPrintf(USART_DEBUG, "WARN:	æ©ç‚´å¸´æ¾¶è¾«è§¦é”›æ°¶æ½ªå¨‰æ› æ®‘clientid\r\n");break;
+//					case 3:UsartPrintf(USART_DEBUG, "WARN:	æ©ç‚´å¸´æ¾¶è¾«è§¦é”›æ°­æ¹‡é”â€³æ«’æ¾¶è¾«è§¦\r\n");break;
+//					case 4:UsartPrintf(USART_DEBUG, "WARN:	æ©ç‚´å¸´æ¾¶è¾«è§¦é”›æ°±æ•¤é´å³°æ‚•é´æ §ç˜‘é®ä¾€æ•Šç’‡ç—‹r\n");break;
+//					case 5:UsartPrintf(USART_DEBUG, "WARN:	æ©ç‚´å¸´æ¾¶è¾«è§¦é”›æ°¶æ½ªå¨‰æ›¢æ‘¼éº?å§£æ–¿î›§tokené—ˆç‚´ç¡¶)\r\n");break;
 //					
-//					default:UsartPrintf(USART_DEBUG, "ERR:	è¿æ¥å¤±è´¥ï¼šæœªçŸ¥é”™è¯¯\r\n");break;
+//					default:UsartPrintf(USART_DEBUG, "ERR:	æ©ç‚´å¸´æ¾¶è¾«è§¦é”›æ°­æ¹­é­ãƒ©æ•Šç’‡ç—‹r\n");break;
 				}
 			}
 		}
 
-		MQTT_DeleteBuffer(&mqttPacket);						//É¾°ü
+		MQTT_DeleteBuffer(&mqttPacket);						//åˆ åŒ…
 
 	}
 //	else
@@ -566,15 +566,15 @@ unsigned short OneNet_FillBuf(char *buf)
 	return (unsigned short)len;
 }
 //==========================================================
-//	º¯ÊıÃû³Æ£º	OneNet_SendData
+//	å‡½æ•°åç§°ï¼š	OneNet_SendData
 //
-//	º¯Êı¹¦ÄÜ£º	ÉÏ´«Êı¾İµ½Æ½Ì¨
+//	å‡½æ•°åŠŸèƒ½ï¼š	ä¸Šä¼ æ•°æ®åˆ°å¹³å°
 //
-//	Èë¿Ú²ÎÊı£º	type£º·¢ËÍÊı¾İµÄ¸ñÊ½
+//	å…¥å£å‚æ•°ï¼š	typeï¼šå‘é€æ•°æ®çš„æ ¼å¼
 //
-//	·µ»Ø²ÎÊı£º	ÎŞ
+//	è¿”å›å‚æ•°ï¼š	æ— 
 //
-//	ËµÃ÷£º		
+//	è¯´æ˜ï¼š		
 //==========================================================
 _Bool OneNet_SendData(void)
 {
@@ -614,21 +614,21 @@ _Bool OneNet_SendData(void)
 	return 0;
 }
 //==========================================================
-//	º¯ÊıÃû³Æ£º	OneNET_Publish
+//	å‡½æ•°åç§°ï¼š	OneNET_Publish
 //
-//	º¯Êı¹¦ÄÜ£º	·¢²¼ÏûÏ¢
+//	å‡½æ•°åŠŸèƒ½ï¼š	å‘å¸ƒæ¶ˆæ¯
 //
-//	Èë¿Ú²ÎÊı£º	topic£º·¢²¼µÄÖ÷Ìâ
-//				msg£ºÏûÏ¢ÄÚÈİ
+//	å…¥å£å‚æ•°ï¼š	topicï¼šå‘å¸ƒçš„ä¸»é¢˜
+//				msgï¼šæ¶ˆæ¯å†…å®¹
 //
-//	·µ»Ø²ÎÊı£º	ÎŞ
+//	è¿”å›å‚æ•°ï¼š	æ— 
 //
-//	ËµÃ÷£º		
+//	è¯´æ˜ï¼š		
 //==========================================================
 void OneNET_Publish(const char *topic, const char *msg)
 {
 
-	MQTT_PACKET_STRUCTURE mqtt_packet = {NULL, 0, 0, 0};						//Ğ­Òé°ü
+	MQTT_PACKET_STRUCTURE mqtt_packet = {NULL, 0, 0, 0};						//åè®®åŒ…
 	
 	UsartPrintf(USART_DEBUG, "Publish Topic: %s, Msg: %s\r\n", topic, msg);
 	
@@ -639,26 +639,26 @@ void OneNET_Publish(const char *topic, const char *msg)
 			one_net_connected = 0;
 		}
 		
-		MQTT_DeleteBuffer(&mqtt_packet);										//É¾°ü
+		MQTT_DeleteBuffer(&mqtt_packet);										//åˆ åŒ…
 	}
 
 }
 
 //==========================================================
-//	º¯ÊıÃû³Æ£º	OneNET_Subscribe
+//	å‡½æ•°åç§°ï¼š	OneNET_Subscribe
 //
-//	º¯Êı¹¦ÄÜ£º	¶©ÔÄ
+//	å‡½æ•°åŠŸèƒ½ï¼š	è®¢é˜…
 //
-//	Èë¿Ú²ÎÊı£º	ÎŞ
+//	å…¥å£å‚æ•°ï¼š	æ— 
 //
-//	·µ»Ø²ÎÊı£º	ÎŞ
+//	è¿”å›å‚æ•°ï¼š	æ— 
 //
-//	ËµÃ÷£º		
+//	è¯´æ˜ï¼š		
 //==========================================================
 void OneNET_Subscribe(void)
 {
 
-	MQTT_PACKET_STRUCTURE mqtt_packet = {NULL, 0, 0, 0};						//Ğ­Òé°ü
+	MQTT_PACKET_STRUCTURE mqtt_packet = {NULL, 0, 0, 0};						//åè®®åŒ…
 		
 	char topic_buf[60];
 	const char *topic = topic_buf;
@@ -674,7 +674,7 @@ void OneNET_Subscribe(void)
 			one_net_connected = 0;
 		}
 		
-		MQTT_DeleteBuffer(&mqtt_packet);										//É¾°ü
+		MQTT_DeleteBuffer(&mqtt_packet);										//åˆ åŒ…
 	}
 
 
@@ -686,15 +686,15 @@ _Bool OneNet_IsConnected(void)
 }
 
 //==========================================================
-//	º¯ÊıÃû³Æ£º	OneNet_RevPro
+//	å‡½æ•°åç§°ï¼š	OneNet_RevPro
 //
-//	º¯Êı¹¦ÄÜ£º	Æ½Ì¨·µ»ØÊı¾İ¼ì²â
+//	å‡½æ•°åŠŸèƒ½ï¼š	å¹³å°è¿”å›æ•°æ®æ£€æµ‹
 //
-//	Èë¿Ú²ÎÊı£º	dataPtr£ºÆ½Ì¨·µ»ØµÄÊı¾İ
+//	å…¥å£å‚æ•°ï¼š	dataPtrï¼šå¹³å°è¿”å›çš„æ•°æ®
 //
-//	·µ»Ø²ÎÊı£º	ÎŞ
+//	è¿”å›å‚æ•°ï¼š	æ— 
 //
-//	ËµÃ÷£º		
+//	è¯´æ˜ï¼š		
 //==========================================================
 void OneNet_RevPro(unsigned char *cmd)
 {

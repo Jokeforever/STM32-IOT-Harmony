@@ -23,9 +23,9 @@ void LED_Set(int mode);
 
 #define PWM_TIMER    htim3
 #define PWM_CHANNEL     TIM_CHANNEL_2
-#define PWM_MAX        1000  /* ¶ÔÓ¦100%Õ¼¿Õ±È */
+#define PWM_MAX        1000  /* å¯¹åº”100%å ç©ºæ¯” */
 
-/* ¿ØÖÆ½á¹¹Ìå */
+/* æ§åˆ¶ç»“æ„ä½“ */
 typedef struct {
     uint8_t enabled;
     int16_t target_lux;
@@ -45,29 +45,29 @@ extern LED_Control led_ctrl;
 
 void LED_PID_Reset(void);
 
-/* APIº¯Êı */
+/* APIå‡½æ•° */
 void LED_Update(int16_t current_lux);
 
-// ÏµÍ³¹¤×÷Ä£Ê½
+// ç³»ç»Ÿå·¥ä½œæ¨¡å¼
 typedef enum {
-    MODE_OFF = 0,      // ¹Ø±ÕÄ£Ê½
-    MODE_CALIBRATION = 1,   // ±ê×¼Ä£Ê½
-    MODE_AUTO_PID = 2, // ×Ô¶¯PIDÄ£Ê½
+    MODE_OFF = 0,      // å…³é—­æ¨¡å¼
+    MODE_CALIBRATION = 1,   // æ ‡å‡†æ¨¡å¼
+    MODE_AUTO_PID = 2, // è‡ªåŠ¨PIDæ¨¡å¼
 } System_Mode;
 
 
 
-//// PWM²ÎÊı
+//// PWMå‚æ•°
 //#define PWM_TIMER       htim3
 //#define PWM_CHANNEL     TIM_CHANNEL_2
-//#define PWM_PERIOD      999  // ARRÖµ£¬¾ö¶¨PWMÆµÂÊ
-//#define PWM_MAX_DUTY    100.0f // ×î´óÕ¼¿Õ±È(%)
-//#define PWM_MIN_DUTY    0.0f   // ×îĞ¡Õ¼¿Õ±È(%)
+//#define PWM_PERIOD      999  // ARRå€¼ï¼Œå†³å®šPWMé¢‘ç‡
+//#define PWM_MAX_DUTY    100.0f // æœ€å¤§å ç©ºæ¯”(%)
+//#define PWM_MIN_DUTY    0.0f   // æœ€å°å ç©ºæ¯”(%)
 
-//// ¹âÇ¿²âÁ¿
+//// å…‰å¼ºæµ‹é‡
 //#define LIGHT_MIN_LUX   0
 //#define LIGHT_MAX_LUX   1000
-//#define TARGET_LUX      500  // Ä¿±ê¹âÕÕÇ¿¶È
+//#define TARGET_LUX      500  // ç›®æ ‡å…‰ç…§å¼ºåº¦
 
 
 
