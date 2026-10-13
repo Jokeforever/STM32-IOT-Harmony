@@ -1062,6 +1062,25 @@ PA9 / PA10
 | `droughtthrehold` | 干旱阈值 | int32 | 读写 | % | 参数 |
 | `moistthrehold` | 湿润阈值 | int32 | 读写 | % | 参数 |
 | `tempthrehold` | 温度阈值 | int32 | 读写 | ℃ | 参数 |
+| `sensor_status` | 传感器状态 | int32 | 只读 | 无 | 位图 |
+
+`sensor_status` 位定义：
+
+```text
+bit0：温度
+bit1：湿度
+bit2：光照
+bit3：CO2
+bit4：土壤湿度
+bit5：水量（预留）
+```
+
+例如：
+
+```text
+31 = 0b00011111：温度、湿度、光照、CO2、土壤湿度全部有效
+0  = 0b00000000：全部无效
+```
 
 ## 15. 控制链路
 
@@ -1254,6 +1273,7 @@ typedef struct
 - [x] PID 参数掉电保存
 - [x] 配置 v1 -> v2 自动迁移
 - [x] 阈值远程配置
+- [x] sensor_status 传感器有效性上报
 
 ## 19. 后续优化方向
 
