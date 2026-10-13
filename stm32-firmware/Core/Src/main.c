@@ -67,10 +67,7 @@
 
 #define SENSOR_VALID_TEMP	(1U << 0)
 #define SENSOR_VALID_HUMI	(1U << 1)
-#define SENSOR_VALID_LIGHT	(1U << 2)
 #define SENSOR_VALID_CO2		(1U << 3)
-#define SENSOR_VALID_MOIST	(1U << 4)
-#define SENSOR_VALID_WATER	(1U << 5)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -285,12 +282,7 @@ int main(void)
 
 			if (LDR_LuxData(&light) != 0U)
 			{
-				sensor_valid |= SENSOR_VALID_LIGHT;
 				LED_Update(light);
-			}
-			else
-			{
-				sensor_valid &= (uint8_t)~SENSOR_VALID_LIGHT;
 			}
 		}
 
@@ -311,14 +303,7 @@ int main(void)
 		if((now_tick - last_upload_tick) >= ONENET_UPLOAD_INTERVAL)	//发送间隔5s
 		{
 			last_upload_tick = now_tick;
-            if (TS_GetData(&moist) != 0U)
-            {
-                sensor_valid |= (SENSOR_VALID_MOIST | SENSOR_VALID_WATER);
-            }
-            else
-            {
-                sensor_valid &= (uint8_t)~(SENSOR_VALID_MOIST | SENSOR_VALID_WATER);
-            }
+            (void)TS_GetData(&moist);
 
             uint16_t raw_ppm = 0U;
             if (CO2GetData(&raw_ppm) != 0U)
@@ -344,14 +329,7 @@ int main(void)
                 sensor_valid &= (uint8_t)~(SENSOR_VALID_TEMP | SENSOR_VALID_HUMI);
             }
 
-            if (LDR_LuxData(&light) != 0U)
-            {
-                sensor_valid |= SENSOR_VALID_LIGHT;
-            }
-            else
-            {
-                sensor_valid &= (uint8_t)~SENSOR_VALID_LIGHT;
-            }
+            (void)LDR_LuxData(&light);
 			OneNet_SendData();									//发送数据
 		
 			ESP8266_Clear();

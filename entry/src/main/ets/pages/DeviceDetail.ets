@@ -789,10 +789,7 @@ export struct DeviceDetail {
             Column() {
               SensorStatusRow({ label: '温度', valid: this.isSensorValid(0) })
               SensorStatusRow({ label: '湿度', valid: this.isSensorValid(1) })
-              SensorStatusRow({ label: '光照', valid: this.isSensorValid(2) })
               SensorStatusRow({ label: 'CO2', valid: this.isSensorValid(3) })
-              SensorStatusRow({ label: '土壤湿度', valid: this.isSensorValid(4) })
-              SensorStatusRow({ label: '水量', valid: this.isSensorValid(5) })
             }
             .width('92%')
             .padding(14)

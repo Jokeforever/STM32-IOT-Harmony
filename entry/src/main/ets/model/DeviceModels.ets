@@ -175,17 +175,8 @@ export class PropertyHelper {
     if ((mask & 2) !== 0) {
       parts.push('湿度');
     }
-    if ((mask & 4) !== 0) {
-      parts.push('光照');
-    }
     if ((mask & 8) !== 0) {
       parts.push('CO2');
-    }
-    if ((mask & 16) !== 0) {
-      parts.push('土壤');
-    }
-    if ((mask & 32) !== 0) {
-      parts.push('水量');
     }
 
     if (parts.length === 0) {
