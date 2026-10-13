@@ -188,6 +188,30 @@ struct ThresholdStepper {
 }
 
 @Component
+struct SensorStatusRow {
+  @Prop label: string = '';
+  @Prop valid: boolean = false;
+
+  build() {
+    Row() {
+      Text(this.label)
+        .fontSize(13)
+        .fontColor('#344054')
+        .layoutWeight(1)
+
+      Text(this.valid ? '有效' : '无效')
+        .fontSize(12)
+        .fontColor(this.valid ? '#0F9D58' : '#D92D20')
+        .backgroundColor(this.valid ? '#E9F7EF' : '#FEECEB')
+        .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+        .borderRadius(8)
+    }
+    .width('100%')
+    .padding({ top: 6, bottom: 6 })
+  }
+}
+
+@Component
 struct HistoryChart {
   @Prop title: string = '';
   @Prop values: number[] = [];
@@ -337,6 +361,20 @@ export struct DeviceDetail {
     return normalized.length > 19
       ? normalized.substring(0, 19)
       : normalized;
+  }
+
+  private getSensorStatusMask(): number {
+    const raw = PropertyHelper.getValue(this.properties, 'sensor_status');
+    const parsed = parseInt(raw);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  private hasSensorStatus(): boolean {
+    return PropertyHelper.getValue(this.properties, 'sensor_status') !== '';
+  }
+
+  private isSensorValid(bit: number): boolean {
+    return (this.getSensorStatusMask() & (1 << bit)) !== 0;
   }
 
   private pushHistory(history: number[], value: number): number[] {
@@ -738,6 +776,36 @@ export struct DeviceDetail {
           }
           .width('92%')
           .margin({ top: 10 })
+
+          // ===== 传感器状态 =====
+          if (this.hasSensorStatus()) {
+            Text('传感器状态')
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#101828')
+              .width('92%')
+              .margin({ top: 18 })
+
+            Column() {
+              SensorStatusRow({ label: '温度', valid: this.isSensorValid(0) })
+              SensorStatusRow({ label: '湿度', valid: this.isSensorValid(1) })
+              SensorStatusRow({ label: '光照', valid: this.isSensorValid(2) })
+              SensorStatusRow({ label: 'CO2', valid: this.isSensorValid(3) })
+              SensorStatusRow({ label: '土壤湿度', valid: this.isSensorValid(4) })
+              SensorStatusRow({ label: '水量', valid: this.isSensorValid(5) })
+            }
+            .width('92%')
+            .padding(14)
+            .margin({ top: 10 })
+            .backgroundColor(Color.White)
+            .borderRadius(16)
+            .shadow({
+              radius: 10,
+              color: '#0F1D2939',
+              offsetX: 0,
+              offsetY: 3
+            })
+          }
 
           // ===== 历史曲线 =====
           Text('历史曲线')

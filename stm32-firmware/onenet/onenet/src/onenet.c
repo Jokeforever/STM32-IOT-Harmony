@@ -468,6 +468,7 @@ _Bool OneNet_DevLink(void)
 }
 
 extern uint8_t temp,humi;
+extern uint8_t sensor_valid;
 extern uint16_t light,moist,ppm;
 extern float water_vol;
 extern System_Mode current_mode ;
@@ -539,6 +540,8 @@ unsigned short OneNet_FillBuf(char *buf)
 		"\"moistthrehold\":{\"value\":%d},", Bump_threhold[1]);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
 		"\"tempthrehold\":{\"value\":%d},", temp_threhold);
+	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
+		"\"sensor_status\":{\"value\":%d},", (int)sensor_valid);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
 		"\"moist\":{\"value\":%d}", moist);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len, "}}");

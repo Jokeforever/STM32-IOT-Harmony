@@ -108,6 +108,8 @@ export class PropertyHelper {
       return '湿润阈值';
     } else if (identifier === 'tempthrehold') {
       return '温度阈值';
+    } else if (identifier === 'sensor_status') {
+      return '传感器状态';
     }
     return identifier;
   }
@@ -142,6 +144,8 @@ export class PropertyHelper {
       return PropertyHelper.getLedModeText(value);
     } else if (identifier === 'bump') {
       return PropertyHelper.getBumpModeText(value);
+    } else if (identifier === 'sensor_status') {
+      return PropertyHelper.getSensorStatusText(value);
     }
 
     return value;
@@ -156,6 +160,38 @@ export class PropertyHelper {
       return '自动';
     }
     return '--';
+  }
+
+  static getSensorStatusText(value: string): string {
+    const mask = parseInt(value);
+    if (Number.isNaN(mask)) {
+      return value;
+    }
+
+    const parts: string[] = [];
+    if ((mask & 1) !== 0) {
+      parts.push('温度');
+    }
+    if ((mask & 2) !== 0) {
+      parts.push('湿度');
+    }
+    if ((mask & 4) !== 0) {
+      parts.push('光照');
+    }
+    if ((mask & 8) !== 0) {
+      parts.push('CO2');
+    }
+    if ((mask & 16) !== 0) {
+      parts.push('土壤');
+    }
+    if ((mask & 32) !== 0) {
+      parts.push('水量');
+    }
+
+    if (parts.length === 0) {
+      return '全部无效';
+    }
+    return parts.join('、') + '有效';
   }
 
   static getBumpModeText(value: string): string {
@@ -181,7 +217,8 @@ export class PropertyHelper {
       identifier === 'CO2threhold' ||
       identifier === 'droughtthrehold' ||
       identifier === 'moistthrehold' ||
-      identifier === 'tempthrehold';
+      identifier === 'tempthrehold' ||
+      identifier === 'sensor_status';
   }
 }
 
