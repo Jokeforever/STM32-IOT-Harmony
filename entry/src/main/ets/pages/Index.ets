@@ -474,6 +474,29 @@ struct Index {
           .borderRadius(10)
         }
 
+        // ===== 离线告警 =====
+        if (!this.deviceOnline && this.lastReportTime > 0) {
+          Row() {
+            Text('⚠')
+              .fontSize(14)
+              .fontColor('#B42318')
+
+            Text('设备离线：最后在线 ' + this.lastOnlineTime)
+              .fontSize(12)
+              .fontColor('#B42318')
+              .layoutWeight(1)
+              .margin({ left: 6 })
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .width('92%')
+          .padding(10)
+          .margin({ top: 10 })
+          .backgroundColor('#FEF3F2')
+          .border({ width: 1, color: '#FDA29B' })
+          .borderRadius(10)
+        }
+
         // ===== 刷新控制 =====
         Row() {
           Button(this.autoRefresh ? '自动刷新：开' : '自动刷新：关')
