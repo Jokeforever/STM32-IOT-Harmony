@@ -1,3 +1,16 @@
+/*
+ * MODULE OVERVIEW
+ * 文件：bump.c
+ * 作用：水泵关闭、手动校准和自动灌溉控制。
+ * 关键函数：
+ *   BUMP_Init()        初始化阈值并默认关闭水泵
+ *   Bump_Control()     根据模式执行水泵控制
+ *   Bump_Set()         修改水泵模式
+ *   Calculate_Water_Volume() 根据土壤湿度估算水量
+ * 注意：
+ *   首次上电默认 Bump_OFF，避免自动灌溉误启动。
+ *   模式变化后会触发 Config_MarkDirty() 保存到 EEPROM。
+ */
   #include "bump.h"
 
 extern uint16_t moist ;

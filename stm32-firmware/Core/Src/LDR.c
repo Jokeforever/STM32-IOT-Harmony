@@ -1,3 +1,14 @@
+/*
+ * MODULE OVERVIEW
+ * 文件：LDR.c
+ * 作用：光敏 ADC 采集、Lux 换算和光照滤波。
+ * 关键函数：
+ *   LDR_Average_Data()  10 次采样去极值平均
+ *   LDR_LuxData()       根据分压公式计算 Lux
+ * 注意：
+ *   光敏模块是模拟量，拔掉后 ADC 仍可能读到数值，
+ *   因此当前 sensor_status 不把光照作为有效性依据。
+ */
 #include "LDR.h"
 
 	

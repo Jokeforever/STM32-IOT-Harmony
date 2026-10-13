@@ -1,3 +1,15 @@
+/*
+ * MODULE OVERVIEW
+ * 文件：usart3.c
+ * 作用：JW01 CO2 传感器 USART3 接收和 6 字节协议解析。
+ * 协议：
+ *   B1=0x2C，B2=高字节，B3=低字节，
+ *   B4=0x03，B5=0xFF，B6=校验和
+ * 关键函数：
+ *   CO2GetData()  校验通过后计算 ppm
+ * 注意：
+ *   只有完整且校验正确的帧才更新 CO2 和有效位。
+ */
 #include "usart3.h"
 
 uint8_t RxState = 0;

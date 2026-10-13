@@ -1,3 +1,16 @@
+/*
+ * MODULE OVERVIEW
+ * 文件：LED.c
+ * 作用：LED PWM 控制、自动模式位置式 PID、手动模式和状态显示。
+ * 关键函数：
+ *   LED_Init()       初始化 PID 默认参数和 PWM
+ *   LED_Set()        切换关闭/常亮/自动模式
+ *   LED_Update()     位置式 PID 计算并直接设置 PWM
+ *   LED_PID_Reset()  清零积分和历史误差
+ * 注意：
+ *   自动模式每 1 秒读取一次光照并执行一次 PID。
+ *   默认 Ki=0、Kd=0，保持原有 P 控制效果，后续再调参。
+ */
 //单片机头文件
 #include "stm32f1xx_hal.h"
 

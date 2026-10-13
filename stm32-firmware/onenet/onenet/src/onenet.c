@@ -1,3 +1,15 @@
+/*
+ * MODULE OVERVIEW
+ * 文件：onenet.c
+ * 作用：OneNET MQTT 鉴权、属性上报、属性下发和 set_reply。
+ * 关键函数：
+ *   OneNet_DevLink()    MQTT 登录
+ *   OneNet_FillBuf()    组装 OneJSON 属性
+ *   OneNet_RevPro()     处理 property/set 下发
+ * 注意：
+ *   led、bump、阈值和 PID 参数变化后会触发 EEPROM 保存。
+ *   sensor_status 只上报 DHT11 和 CO2 的有效性。
+ */
 /**
 	************************************************************
 	************************************************************

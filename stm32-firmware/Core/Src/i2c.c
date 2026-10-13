@@ -1,3 +1,15 @@
+/*
+ * MODULE OVERVIEW
+ * 文件：i2c.c
+ * 作用：I2C1 初始化、OLED 共用总线、24C02 EEPROM 读写。
+ * 关键函数：
+ *   EEPROM24C02_Read()
+ *   EEPROM24C02_Write()
+ *   EEPROM24C02_IsReady()
+ * 注意：
+ *   EEPROM 地址 0xA0（7 位 0x50），OLED 地址 0x78（7 位 0x3C）。
+ *   I2C 操作按顺序执行，不能并发访问。
+ */
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************

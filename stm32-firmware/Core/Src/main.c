@@ -1,3 +1,16 @@
+/*
+ * MODULE OVERVIEW
+ * 文件：main.c
+ * 作用：系统主流程、外设初始化、5 秒上报、模式控制、配置加载和掉电保存。
+ * 关键流程：
+ *   1. HAL/RCC/GPIO/ADC/I2C/USART/TIM 初始化
+ *   2. Hardware_Init() 初始化显示、传感器、LED、水泵和 EEPROM 参数
+ *   3. Config_Load() 读取 24C02 参数并迁移旧版本
+ *   4. 主循环读取传感器、上报 OneNET、处理按键和执行器
+ * 注意：
+ *   delay_ms() 依赖 TIM4 1 MHz 时基，delay_us 使用 DWT。
+ *   sensor_status 只反映可可靠判断的 DHT11 和 CO2 状态。
+ */
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
