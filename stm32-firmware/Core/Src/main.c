@@ -70,6 +70,7 @@
 #define SENSOR_VALID_LIGHT	(1U << 2)
 #define SENSOR_VALID_CO2		(1U << 3)
 #define SENSOR_VALID_MOIST	(1U << 4)
+#define SENSOR_VALID_WATER	(1U << 5)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -312,11 +313,11 @@ int main(void)
 			last_upload_tick = now_tick;
             if (TS_GetData(&moist) != 0U)
             {
-                sensor_valid |= SENSOR_VALID_MOIST;
+                sensor_valid |= (SENSOR_VALID_MOIST | SENSOR_VALID_WATER);
             }
             else
             {
-                sensor_valid &= (uint8_t)~SENSOR_VALID_MOIST;
+                sensor_valid &= (uint8_t)~(SENSOR_VALID_MOIST | SENSOR_VALID_WATER);
             }
 
             uint16_t raw_ppm = 0U;
