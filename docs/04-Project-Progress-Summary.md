@@ -286,6 +286,45 @@ App 显示新模式
 - 缓存使用 `PersistentStorage + AppStorage`
 - 不修改 STM32 和 OneNET 属性
 
+### 6.15 固件分层重构（第一阶段）
+
+**目标**：为后续更换 MCU（F407 或重画 PCB）做准备，
+把业务逻辑、中间件、硬件驱动分离，使换平台时只需改驱动层。
+
+**本次完成**：
+
+- 新建分层目录 `modules/{app,drivers,middleware}/{src,inc}`
+- 配置管理模块从 `main.c` / `main.h` 抽离为独立模块：
+  - `modules/middleware/inc/mw_config.h`
+  - `modules/middleware/src/mw_config.c`
+- 抽出内容：`DeviceConfig` 结构、`CONFIG_*` 宏、12 个 `Config_*` 函数
+- 新增可选接口 `Config_IsDirty()`，便于查询未保存状态
+- `LED.c`、`Key.c`、`bump.c`、`onenet.c` 补充 `#include "mw_config.h"`，
+  消除 10 条 `Config_MarkDirty declared implicitly` 隐式声明警告
+
+**效果**：
+
+| 指标 | 重构前 | 重构后 |
+|---|---|---|
+| `main.c` 行数 | 912 | 513 |
+| `main.c` 大小 | 23.5 KB | 约 13 KB |
+| Code 尺寸 | 48098 | **48098（未变化）** |
+| 编译警告 | 17 | 3（均为原有枚举警告） |
+
+**验证**：
+
+- Keil MDK 编译通过，0 Error(s)，3 Warning(s)
+- 编译产物 Code/RO-data 与重构前完全一致，确认逻辑零改动
+- 尚未烧录实测，下一步验证参数保存和模式恢复功能
+
+**后续计划**（按优先级）：
+
+1. 抽出滤波算法到 `middleware/mw_filter.c`
+2. 时间基准统一（当前混用 HAL_Delay / SysTick / TIM4 / DWT）
+3. 非阻塞 AT 指令状态机
+4. 上报确认机制（订阅 `property/post/reply`）
+5. 拆分 `LED.c`（PWM 与 PID）、`bump.c`（GPIO 与策略）
+
 ## 7. 当前版本标记
 
 App 主界面顶部中间显示版本号：

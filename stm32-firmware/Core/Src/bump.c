@@ -12,6 +12,7 @@
  *   模式变化后会触发 Config_MarkDirty() 保存到 EEPROM。
  */
   #include "bump.h"
+  #include "mw_config.h"
 
 extern uint16_t moist ;
 extern float water_vol ;

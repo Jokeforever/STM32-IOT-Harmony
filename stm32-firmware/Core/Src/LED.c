@@ -16,6 +16,7 @@
 
 //硬件驱动
 #include "LED.h"
+#include "mw_config.h"
 #include <math.h>
 
 

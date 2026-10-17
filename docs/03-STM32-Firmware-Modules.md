@@ -55,14 +55,32 @@ E:\fuchuang\code\IOT5-smart2-IOT-final
 IOT5-smart2-IOT-final
 ├── Core/
 │   ├── Inc/
-│   └── Src/
-├── Drivers/
-├── MDK-ARM/
-└── onenet/
-    ├── device/
-    ├── MQTT/
-    └── onenet/
+│   └── Src/            主流程、传感器、控制、显示、按键
+├── Drivers/            STM32 HAL 库和 CMSIS
+├── MDK-ARM/            Keil 工程和编译产物
+├── onenet/             OneNET 协议与 MQTT
+│   ├── CJSON/
+│   ├── MQTT/
+│   ├── device/
+│   └── onenet/
+└── modules/            分层重构新增（2026-10-17）
+    └── middleware/
+        ├── inc/
+        │   └── mw_config.h
+        └── src/
+            └── mw_config.c
 ```
+
+**分层说明**：
+
+2026-10-17 开始进行分层重构，目标是把「业务逻辑 / 中间件 / 硬件驱动」分开，
+为后续更换 MCU（F407 或换 PCB）做准备。第一批抽离的是配置管理模块。
+
+`modules/middleware/` 存放与硬件无关的通用逻辑，换 MCU 时不需要修改。
+目前只有配置管理一个模块，后续会把滤波、时间基准、错误码等陆续迁入。
+
+**注意**：Keil 工程需要把 `modules/middleware/inc` 加入 Include Paths，
+否则会报 `cannot open source input file "mw_config.h"`。
 
 ## 2. 引脚与设备对应关系
 
@@ -141,24 +159,46 @@ IOT5-smart2-IOT-final
 
 ### 3.3 主循环
 
-主循环大致做这些事：
+主循环使用 `HAL_GetTick()` 做分时调度，实际代码（main.c）：
 
 ```c
 while (1)
 {
+    Watchdog_Feed();
+    Config_Process();               /* 配置延时写入 EEPROM */
+
     Key_Func();
 
-    if (++timeCount >= 100)
+    /* LED 自动 PID：每 1 秒一次 */
+    if ((current_mode == MODE_AUTO_PID) &&
+        ((HAL_GetTick() - last_led_control_tick) >= 1000U))
     {
+        last_led_control_tick = HAL_GetTick();
+        if (LDR_LuxData(&light) != 0U)
+            LED_Update(light);
+    }
+
+    /* 断线重连：每 10 秒尝试一次 */
+    if (!OneNet_IsConnected() &&
+        (HAL_GetTick() - last_reconnect_tick >= 10000))
+    {
+        last_reconnect_tick = HAL_GetTick();
+        if (ESP8266_SendCmd(ESP8266_ONENET_INFO, "CONNECT") == 0)
+            if (OneNet_DevLink() == 0)
+                OneNET_Subscribe();
+    }
+
+    /* 采集 + 上报：每 5 秒一次 */
+    if ((now_tick - last_upload_tick) >= ONENET_UPLOAD_INTERVAL)
+    {
+        last_upload_tick = now_tick;
         TS_GetData(&moist);
-        CO2GetData(&ppm);
-        DHT11_Read_Data(&temp, &humi);
-        LDR_LuxData(&light);
+        /* CO2、DHT11 读取后做三点中值滤波 */
         OneNet_SendData();
-        timeCount = 0;
         ESP8266_Clear();
     }
 
+    /* 处理云端下发 */
     dataPtr = ESP8266_GetIPD(0);
     if (dataPtr != NULL)
         OneNet_RevPro(dataPtr);
@@ -175,9 +215,16 @@ while (1)
 
 时间关系：
 
-- 主循环约 10ms 一次
-- `timeCount >= 100` 约等于 1 秒
-- 所以传感器和 OneNET 上报频率约为 1Hz
+| 参数 | 值 | 宏/位置 |
+|---|---|---|
+| 主循环周期 | 约 10 ms | `delay_ms(10)` |
+| 上报周期 | **5000 ms（5 秒）** | `ONENET_UPLOAD_INTERVAL` |
+| LED PID 控制 | 1000 ms | 硬编码 |
+| 断线重连 | 10000 ms | 硬编码 |
+| 配置写 EEPROM | 延时 1000 ms | `Config_Process()` |
+
+> **注意**：早期版本用 `timeCount >= 100` 计数实现约 1Hz 上报，
+> 现已改为基于 `HAL_GetTick()` 的 5 秒定时，与 `delay_ms()` 的实际耗时解耦。
 
 ### 3.4 全局数据
 
@@ -1185,6 +1232,20 @@ BUMP_ON / BUMP_OFF
 
 ### 17.4 24C02 参数掉电保存实现
 
+> **代码位置（2026-10-17 重构后）**：
+> 配置管理已从 `main.c` / `main.h` 抽离为独立模块：
+>
+> ```text
+> modules/middleware/inc/mw_config.h    结构和接口声明
+> modules/middleware/src/mw_config.c    实现（原 main.c 414-821 行）
+> ```
+>
+> 原来在 `main.h` 里的 `DeviceConfig` 结构、`CONFIG_*` 宏和 `Config_*` 声明
+> 已全部移到 `mw_config.h`。调用 `Config_MarkDirty()` 等函数的文件
+> （`LED.c`、`Key.c`、`bump.c`、`onenet.c`）需要 `#include "mw_config.h"`。
+>
+> 逻辑与重构前完全一致，编译产物 Code 尺寸未变化（48098 字节）。
+
 当前工程已经在 `i2c.c/i2c.h` 中增加了 24C02 硬件 I2C 驱动，复用 OLED 使用的 I2C1：
 
 ```text
@@ -1194,7 +1255,7 @@ PB9 -> SDA
 
 24C02 使用 7 位地址 `0x50`，HAL 使用 8 位地址 `0xA0`。
 
-配置结构：
+配置结构（定义在 `mw_config.h`）：
 
 ```c
 typedef struct
@@ -1214,6 +1275,11 @@ typedef struct
     uint16_t soil_high;
     uint16_t soil_wet_adc;
     uint16_t soil_dry_adc;
+    int16_t  pid_target_lux;
+    uint16_t pid_dead_zone;
+    int32_t  pid_kp_x1000;
+    int32_t  pid_ki_x1000;
+    int32_t  pid_kd_x1000;
     uint32_t crc32;
 } DeviceConfig;
 ```

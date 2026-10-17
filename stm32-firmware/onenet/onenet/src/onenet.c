@@ -1,4 +1,4 @@
-/*
+﻿/*
  * MODULE OVERVIEW
  * 文件：onenet.c
  * 作用：OneNET MQTT 鉴权、属性上报、属性下发和 set_reply。
@@ -52,6 +52,7 @@
 //#include "sht20.h"
 #include "LED.h"
 #include "bump.h"
+#include "mw_config.h"
 #include "oled.h"
 #include "delay.h"
 //C库

@@ -2,6 +2,54 @@
 
 本文件记录项目中的重要功能、修复和验证结果。
 
+## 2026-10-17 - 固件分层重构（第一阶段：配置模块抽离）
+
+### 重构
+
+- 新建分层目录 `modules/{app,drivers,middleware}/{src,inc}`，
+  为后续更换 MCU（F407 或重画 PCB）做准备。
+- 配置管理模块从 `main.c` / `main.h` 抽离为独立模块：
+  - 新增 `modules/middleware/inc/mw_config.h`
+  - 新增 `modules/middleware/src/mw_config.c`
+- 抽出内容：`DeviceConfig` 结构、`CONFIG_*` 宏、12 个 `Config_*` 函数
+  （原 `main.c` 第 414-821 行）。
+- 新增可选接口 `Config_IsDirty()`，用于查询是否有未保存的参数变化。
+
+### 修复
+
+- `LED.c`、`Key.c`、`bump.c`、`onenet.c` 补充 `#include "mw_config.h"`，
+  消除 10 条 `Config_MarkDirty declared implicitly` 隐式声明警告。
+  隐式声明在 C89 下会让编译器假定返回 `int`，是潜在隐患。
+
+### 同步
+
+- 将固件 `LED.c` 的 `target_lux` 从 500 修正为 200，与硬件工程保持一致。
+
+### 验证
+
+- Keil MDK 编译通过，0 Error(s)，3 Warning(s)。
+- 剩余 3 条警告为 `Key.c` 原有枚举类型混用警告，不在本次改动范围。
+- 编译产物与重构前完全一致，确认逻辑零改动：
+
+```text
+Code=48098  RO-data=6494  RW-data=188  ZI-data=7964
+```
+
+- **尚未烧录实测**，下一步需验证参数保存和模式恢复功能。
+
+### 影响
+
+| 指标 | 重构前 | 重构后 |
+|---|---|---|
+| `main.c` 行数 | 912 | 513 |
+| 编译警告 | 17 | 3 |
+
+### 注意事项
+
+- Keil 工程需要把 `modules/middleware/inc` 加入 Include Paths，
+  并添加 `modules/middleware/src/mw_config.c` 到工程，否则无法编译。
+- 本次只改了 STM32 固件，App 代码未改动。
+
 ## 2026-10-17 - AI 交接文档
 
 - 新增 docs/05-AI-Handoff.md，说明项目硬件、软件结构、当前进度、构建方式、已知限制和接手规则。
