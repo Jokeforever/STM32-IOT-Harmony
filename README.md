@@ -20,6 +20,15 @@ App 主界面顶部中间显示版本号：
 v13
 ```
 
+## 项目文档
+
+- [AI 交接文档](docs/05-AI-Handoff.md)
+- [鸿蒙 App 架构](docs/01-HarmonyOS-App-Architecture.md)
+- [App 调试记录](docs/02-HarmonyOS-App-Debugging-Notes.md)
+- [STM32 模块说明](docs/03-STM32-Firmware-Modules.md)
+- [项目进度总结](docs/04-Project-Progress-Summary.md)
+- [更新日志](CHANGELOG.md)
+
 ## 系统架构
 
 ```text
