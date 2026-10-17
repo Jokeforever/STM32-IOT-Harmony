@@ -2,6 +2,42 @@
 
 本文件记录项目中的重要功能、修复和验证结果。
 
+## 2026-10-17 - 固件分层重构（第二阶段：滤波模块抽离）
+
+### 重构
+
+- 滤波算法从 `main.c` 抽离为独立模块：
+  - 新增 `modules/middleware/inc/mw_filter.h`
+  - 新增 `modules/middleware/src/mw_filter.c`
+- 抽出内容：`Filter_Median3_U8`、`Filter_Median3_U16`（原 `main.c` 第 137-199 行）
+- 新增预留接口 `Filter_Median3_ResetU8/ResetU16`，用于传感器从无效恢复有效时
+  清空滤波历史，避免断线前的旧数据与新读数混在一起做中值。当前未调用。
+
+### 验证
+
+- Keil MDK 编译通过，**0 Error(s)，0 Warning(s)**。
+- 逻辑零改动（纯代码搬家）。
+
+```text
+Code=48102  RO-data=6498  RW-data=188  ZI-data=7964
+```
+
+- 相比上一版本 Code +4、RO-data +4，共 +8 字节。
+  原因是函数去掉 `static` 后无法内联，需保留独立符号，属预期代价。
+- **尚未烧录实测**。
+
+### 影响
+
+| 指标 | 重构前 | 步骤 1 后 | 步骤 2 后 |
+|---|---|---|---|
+| `main.c` 行数 | 912 | 513 | 457 |
+| 编译警告 | 17 | 3 | 0 |
+
+### 注意事项
+
+- Keil 工程需添加 `modules/middleware/src/mw_filter.c` 到工程。
+- Include Paths 沿用上一步已加的 `modules/middleware/inc`，无需重复添加。
+
 ## 2026-10-17 - 固件分层重构（第一阶段：配置模块抽离）
 
 ### 重构

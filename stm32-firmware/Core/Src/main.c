@@ -47,6 +47,7 @@
 
 //中间件层
 #include "mw_config.h"
+#include "mw_filter.h"
 
 //硬件驱动
 #include "myusart.h"
@@ -134,69 +135,12 @@ void Watchdog_Feed(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-static uint8_t Filter_Median3_U8(uint8_t history[3], uint8_t *count, uint8_t value)
-{
-    uint8_t a;
-    uint8_t b;
-    uint8_t c;
+/* ============================================================
+ * 滤波算法已抽离到 modules/middleware/src/mw_filter.c
+ * 原 137-199 行的 Filter_Median3_U8 / U16 现由 mw_filter.h 提供，
+ * 逻辑未做任何改动。
+ * ============================================================ */
 
-    if (*count < 3U)
-    {
-        history[*count] = value;
-        (*count)++;
-        return value;
-    }
-
-    history[0] = history[1];
-    history[1] = history[2];
-    history[2] = value;
-
-    a = history[0];
-    b = history[1];
-    c = history[2];
-
-    if (((a >= b) && (a <= c)) || ((a <= b) && (a >= c)))
-    {
-        return a;
-    }
-    if (((b >= a) && (b <= c)) || ((b <= a) && (b >= c)))
-    {
-        return b;
-    }
-    return c;
-}
-
-static uint16_t Filter_Median3_U16(uint16_t history[3], uint8_t *count, uint16_t value)
-{
-    uint16_t a;
-    uint16_t b;
-    uint16_t c;
-
-    if (*count < 3U)
-    {
-        history[*count] = value;
-        (*count)++;
-        return value;
-    }
-
-    history[0] = history[1];
-    history[1] = history[2];
-    history[2] = value;
-
-    a = history[0];
-    b = history[1];
-    c = history[2];
-
-    if (((a >= b) && (a <= c)) || ((a <= b) && (a >= c)))
-    {
-        return a;
-    }
-    if (((b >= a) && (b <= c)) || ((b <= a) && (b >= c)))
-    {
-        return b;
-    }
-    return c;
-}
 
 /* USER CODE END 0 */
 

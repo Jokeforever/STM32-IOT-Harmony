@@ -64,20 +64,29 @@ IOT5-smart2-IOT-final
 │   ├── device/
 │   └── onenet/
 └── modules/            分层重构新增（2026-10-17）
-    └── middleware/
+    └── middleware/     与硬件无关的通用逻辑
         ├── inc/
-        │   └── mw_config.h
+        │   ├── mw_config.h     配置管理接口
+        │   └── mw_filter.h     滤波算法接口
         └── src/
-            └── mw_config.c
+            ├── mw_config.c     配置管理实现
+            └── mw_filter.c     滤波算法实现
 ```
 
 **分层说明**：
 
 2026-10-17 开始进行分层重构，目标是把「业务逻辑 / 中间件 / 硬件驱动」分开，
-为后续更换 MCU（F407 或换 PCB）做准备。第一批抽离的是配置管理模块。
+为后续更换 MCU（F407 或换 PCB）做准备。
 
 `modules/middleware/` 存放与硬件无关的通用逻辑，换 MCU 时不需要修改。
-目前只有配置管理一个模块，后续会把滤波、时间基准、错误码等陆续迁入。
+目前已迁入两个模块：
+
+| 模块 | 内容 | 原位置 |
+|---|---|---|
+| `mw_config` | 参数掉电保存、双槽、CRC32、版本迁移 | `main.c` 414-821 行 |
+| `mw_filter` | 三点中值滤波 | `main.c` 137-199 行 |
+
+后续计划把时间基准、错误码等陆续迁入。
 
 **注意**：Keil 工程需要把 `modules/middleware/inc` 加入 Include Paths，
 否则会报 `cannot open source input file "mw_config.h"`。
@@ -443,12 +452,23 @@ DHT11 和 CO2：
   -> 取中间值
 ```
 
-对应函数：
+对应函数（2026-10-17 重构后位于 `modules/middleware/`）：
 
 ```c
-Filter_Median3_U8()
-Filter_Median3_U16()
+/* mw_filter.h */
+Filter_Median3_U8()      /* 8 位，用于 DHT11 温湿度 */
+Filter_Median3_U16()     /* 16 位，用于 CO2 */
+Filter_Median3_ResetU8()   /* 重置历史（预留，当前未调用） */
+Filter_Median3_ResetU16()  /* 重置历史（预留，当前未调用） */
 ```
+
+**关于 Reset 接口**：
+
+`Filter_Median3_Reset*` 目前未被调用。它的用途是：当传感器从「无效」恢复「有效」时，
+清掉滤波历史，避免断线前的旧数据与新读数混在一起做中值。
+
+例如 DHT11 断线 10 秒后恢复，若不重置，前 3 个读数会与 10 秒前的数据一起取中值，
+可能导致显示值短暂失真。后续可在 `sensor_valid` 由 0 变 1 时调用。
 
 注意：
 

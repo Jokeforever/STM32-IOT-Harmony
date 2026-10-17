@@ -291,39 +291,51 @@ App 显示新模式
 **目标**：为后续更换 MCU（F407 或重画 PCB）做准备，
 把业务逻辑、中间件、硬件驱动分离，使换平台时只需改驱动层。
 
-**本次完成**：
+**已完成的两个模块**：
 
-- 新建分层目录 `modules/{app,drivers,middleware}/{src,inc}`
-- 配置管理模块从 `main.c` / `main.h` 抽离为独立模块：
-  - `modules/middleware/inc/mw_config.h`
-  - `modules/middleware/src/mw_config.c`
+| 步骤 | 模块 | 内容 | 原位置 |
+|---|---|---|---|
+| 1 | `mw_config` | 参数掉电保存、双槽、CRC32、版本迁移 | `main.c` 414-821 行 |
+| 2 | `mw_filter` | 三点中值滤波 | `main.c` 137-199 行 |
+
+**步骤 1（配置模块）**：
+
+- 配置管理从 `main.c` / `main.h` 抽离为独立模块
 - 抽出内容：`DeviceConfig` 结构、`CONFIG_*` 宏、12 个 `Config_*` 函数
 - 新增可选接口 `Config_IsDirty()`，便于查询未保存状态
 - `LED.c`、`Key.c`、`bump.c`、`onenet.c` 补充 `#include "mw_config.h"`，
   消除 10 条 `Config_MarkDirty declared implicitly` 隐式声明警告
 
-**效果**：
+**步骤 2（滤波模块）**：
 
-| 指标 | 重构前 | 重构后 |
-|---|---|---|
-| `main.c` 行数 | 912 | 513 |
-| `main.c` 大小 | 23.5 KB | 约 13 KB |
-| Code 尺寸 | 48098 | **48098（未变化）** |
-| 编译警告 | 17 | 3（均为原有枚举警告） |
+- `Filter_Median3_U8/U16` 抽离到 `modules/middleware/src/mw_filter.c`
+- 新增 `Filter_Median3_ResetU8/ResetU16` 预留接口（当前未调用），
+  用于传感器从无效恢复有效时清空历史，避免旧数据污染中值
+
+**累计效果**：
+
+| 指标 | 重构前 | 步骤 1 后 | 步骤 2 后 |
+|---|---|---|---|
+| `main.c` 行数 | 912 | 513 | **457** |
+| Code 尺寸 | 48098 | 48098 | 48102 |
+| RO-data | 6494 | 6494 | 6498 |
+| 编译警告 | 17 | 3 | **0** |
+
+> 步骤 2 的 +8 字节是函数去掉 `static` 后无法内联导致的，属预期代价。
 
 **验证**：
 
-- Keil MDK 编译通过，0 Error(s)，3 Warning(s)
-- 编译产物 Code/RO-data 与重构前完全一致，确认逻辑零改动
-- 尚未烧录实测，下一步验证参数保存和模式恢复功能
+- Keil MDK 编译通过，**0 Error(s)，0 Warning(s)**
+- 逻辑零改动（纯代码搬家）
+- **尚未烧录实测**，下一步需验证参数保存、模式恢复和滤波效果
 
 **后续计划**（按优先级）：
 
-1. 抽出滤波算法到 `middleware/mw_filter.c`
-2. 时间基准统一（当前混用 HAL_Delay / SysTick / TIM4 / DWT）
-3. 非阻塞 AT 指令状态机
-4. 上报确认机制（订阅 `property/post/reply`）
-5. 拆分 `LED.c`（PWM 与 PID）、`bump.c`（GPIO 与策略）
+1. 时间基准统一（当前混用 HAL_Delay / SysTick / TIM4 / DWT）
+2. 非阻塞 AT 指令状态机
+3. 上报确认机制（订阅 `property/post/reply`）
+4. 拆分 `LED.c`（PWM 与 PID）、`bump.c`（GPIO 与策略）
+5. 文件改名移目录（`dht11.c` → `drv_dht11.c` 等）
 
 ## 7. 当前版本标记
 
