@@ -50,7 +50,7 @@ void LED_Set( int mode)
 void LED_Init(void)
 {
     led_ctrl.enabled = 1;
-    led_ctrl.target_lux = 500;
+    led_ctrl.target_lux = 200;
     led_ctrl.k_p = 1.5f;
     led_ctrl.k_i = 0.0f;
     led_ctrl.k_d = 0.0f;
