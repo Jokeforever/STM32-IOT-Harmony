@@ -82,9 +82,6 @@
 #define ONENET_UPLOAD_INTERVAL	5000	// 5s
 #define USE_WATCHDOG			1
 
-#define SENSOR_VALID_TEMP	(1U << 0)
-#define SENSOR_VALID_HUMI	(1U << 1)
-#define SENSOR_VALID_CO2		(1U << 3)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -236,7 +233,7 @@ int main(void)
 		Key_Func();
 
 		if ((current_mode == MODE_AUTO_PID) &&
-		    ((HAL_GetTick() - last_led_control_tick) >= 1000U))
+		    ((HAL_GetTick() - last_led_control_tick) >= LED_CONTROL_INTERVAL_MS))
 		{
 			last_led_control_tick = HAL_GetTick();
 

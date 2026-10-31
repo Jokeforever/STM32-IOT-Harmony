@@ -1,6 +1,39 @@
 # 项目 AI 交接文档
 
-最后更新：2026-10-17
+> **2026-10-31 当前实现补充**
+> 最新固件已将配置和中值滤波拆为 modules/middleware 下的 mw_config/mw_filter。
+> 本轮统一了风扇输出控制，修正 LED 默认目标和 PID dt，并更正 App 的脉冲灌溉/估算补水量名称。
+> 默认目标 200 仅用于新配置、迁移补值和非法值回退，已有有效 EEPROM 目标不强制覆盖。
+> 当前验证结果与烧录待办请查 CHANGELOG.md，原始真实配置工程路径不变。
+
+最后更新：2026-10-31
+
+## 最新验证状态（2026-10-31）
+
+- 用户反馈：除水泵、风扇、继电器相关部分外，其余 STM32 改动基本正常。
+- 水泵、风扇、继电器：由于测试条件暂不方便而未测，先搁置；不应标记为故障，也不应写成全部实测通过。
+- 主机回归：实际控制/PID/配置函数配合 GPIO、时钟和 EEPROM 模拟，32 项断言通过；修改前备份能重现风扇请求覆盖。
+- Keil 完整重编译：0 错误、8 个现有警告（Key.c 3 个、cJSON 5 个）。
+- App ArkTS 源码及资源编译通过，保留服务层 3 条现有异常处理警告。
+- 新界面已预览；用户确认长截图中的重复、断层属于截图拼接，实际页面正常。
+- 用户说明：截图采集时STM32未上电；截图仅用于界面展示，不据此新增联网故障记录。
+
+## 修改、验证与同步约定
+
+1. STM32 先修改并编译 `E:\fuchuang\code\IOT5-smart2-IOT-final`。
+2. 等用户确认效果，再把功能变更同步到本仓库的 `stm32-firmware` 脱敏副本。
+3. App 直接修改 `E:\harmony\HarmonyEmbeddedLab`。
+4. 是否提交和上传 Git 由用户明确决定，验证正常不等于自动授权上传。
+5. 真实 WiFi、OneNET 设备密钥和 App 用户密钥不得进入仓库。
+6. 源码保持 UTF-8；未明确要求时不生成 HAP，不自动烧录、不清空 EEPROM。
+
+## 本轮接手重点
+
+- App新界面见docs/07，主题和公共组件分别位于theme/AppTheme.ets、components/MonitorComponents.ets。
+- STM32控制/PID改动与待测项目见docs/06，32项模拟回归和完整编译不能替代执行器实测。
+- 当前主要新增模块为mw_config和mw_filter；mw_config仍未完全解耦。
+- F407/S3新底板未启用；统一数据模型未开始，不要误认为后续计划已实现。
+- 用户本次明确要求上传既有修改；这次授权不等于以后自动上传。
 
 ## 0. 这份文档怎么用
 
@@ -35,8 +68,9 @@ HarmonyOS App 显示数据并下发控制
 当前阶段：
 
 ```text
-已经可以稳定运行
-传感器、OneNET、鸿蒙 App、参数保存、PID、历史曲线和阈值远程配置均已实现
+核心链路与功能此前已打通，近期完成控制修复和App美化
+其余STM32改动用户反馈基本正常；水泵/风扇/继电器暂未测
+截图采集时STM32未上电，不据此新增联网故障记录
 ```
 
 当前没有使用 RTOS，仍然是主循环 + 定时器 + 中断结构。
@@ -88,7 +122,9 @@ E:\fuchuang\code\IOT5-smart2-IOT-final
 原则：
 
 ```text
-代码修改：两份工程同步修改
+STM32：先改真实硬件工程，用户确认效果后再同步仓库脱敏副本
+App：直接修改 E:\harmony\HarmonyEmbeddedLab
+Git：仅在用户明确要求后提交、上传
 真实烧录：使用 E:\fuchuang\code\IOT5-smart2-IOT-final
 GitHub 提交：只提交 E:\harmony\HarmonyEmbeddedLab
 ```
@@ -108,7 +144,7 @@ GitHub 提交：只提交 E:\harmony\HarmonyEmbeddedLab
 | DHT11 | 空气温湿度 |
 | 电阻式土壤传感器 | 土壤湿度 |
 | LDR 光敏模块 | 光照 |
-| JW01 | CO2/TVOC 模拟量 |
+| JW01 | 串口输出CO2相关读数 |
 | OLED | 本地显示 |
 | 24C02 | 参数掉电保存 |
 | LED 灯带 | 照明/PID 控制 |
@@ -169,7 +205,9 @@ stm32-firmware/
 
 | 文件 | 作用 |
 |---|---|
-| `main.c` | 主流程、初始化、5 秒上报、配置加载、LED 控制循环 |
+| `main.c` | 主流程、初始化、5秒上报、配置调用、LED控制调度 |
+| `modules/middleware/src/mw_config.c` | 配置、双槽CRC、迁移、延时保存 |
+| `modules/middleware/src/mw_filter.c` | 三点中值滤波 |
 | `adcx.c` | ADC 校准、读取、滤波 |
 | `TS.c` | 土壤湿度 |
 | `LDR.c` | 光照 |
@@ -300,8 +338,8 @@ Slot B = 0x40
 | `ppm` | int32 | 只读 | CO2 |
 | `moist` | int32 | 只读 | 土壤湿度 |
 | `water_vol` | float | 只读 | 估算水量 |
-| `led` | int32 | 读写 | 0/1/2 |
-| `bump` | int32 | 读写 | 0/1/2 |
+| `led` | enum | 读写 | 0/1/2 |
+| `bump` | enum | 读写 | 0/1/2，模式1为脉冲灌溉 |
 | `CO2threhold` | int32 | 读写 | 350~4000 |
 | `droughtthrehold` | int32 | 读写 | 0~100 |
 | `moistthrehold` | int32 | 读写 | 0~100 |
@@ -380,6 +418,9 @@ main
 最近提交：
 
 ```text
+c5b858c refactor: extract filter module from main.c
+301e5e7 refactor: extract config module from main.c
+77f3888 fix: sync LED target_lux with hardware project (500 -> 200)
 d581c35 chore: convert STM32 sources to UTF-8
 fa8f185 docs: add module overview comments to STM32 firmware
 9645a2f docs: document app state restore cache

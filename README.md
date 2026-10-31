@@ -1,288 +1,82 @@
 # STM32-IOT-Harmony
-> 更新日志：[CHANGELOG.md](CHANGELOG.md)
 
-STM32 + ESP8266 + OneNET + HarmonyOS 智慧环境监控系统，支持数据采集、云端上报、实时监控与双向控制。
-# 基于 STM32 + ESP8266 + OneNET + HarmonyOS 的智慧环境监控系统
-
-> STM32 采集环境数据 → ESP8266 通过 WiFi 上传 OneNET → OneNET 物模型保存数据 → HarmonyOS App 实时显示并控制设备
-
-## 项目简介
-
-本项目实现了从 STM32 环境数据采集，到 ESP8266 WiFi 上传 OneNET，再到 HarmonyOS App 实时监控与双向控制的完整闭环。
-
-当前状态：
-
-**已经初步完成，可以进行数据监控和双向控制。**
-
-App 主界面顶部中间显示版本号：
+STM32 + ESP8266 + OneNET + HarmonyOS 的单节点环境监测与控制项目。
 
 ```text
-v13
+传感器 → STM32F103 → ESP8266 → OneNET 旧版物模型 → HarmonyOS App
+执行器 ← STM32F103 ← 属性下发 ← OneNET ← App 控制与阈值设置
 ```
 
-## 项目文档
+## 当前实现
 
-- [AI 交接文档](docs/05-AI-Handoff.md)
-- [鸿蒙 App 架构](docs/01-HarmonyOS-App-Architecture.md)
-- [App 调试记录](docs/02-HarmonyOS-App-Debugging-Notes.md)
-- [STM32 模块说明](docs/03-STM32-Firmware-Modules.md)
-- [项目进度总结](docs/04-Project-Progress-Summary.md)
+- STM32 裸机主循环、中断接收、定时采集与约 5 秒属性上报。
+- DHT11、JW01、模拟光照与土壤湿度采集，滤波及部分传感器有效性上报。
+- LED 位置式 PID、脉冲/自动灌溉、温度/CO2 通风请求合并。
+- 24C02 双槽、CRC32、配置 v1→v2 迁移及延时保存。
+- ESP8266 TCP/MQTT 重连和看门狗。
+- App 深绿/薄荷绿/暖白界面、设备读数、控制、阈值、趋势及缓存。
+- App 10 秒自动刷新、30 秒属性时间戳在线判断；未读取数据时显示 `--`。
+
+当前硬件仍为 **F103 + ESP8266**。F407/S3 新底板仅作未来方案讨论，未投入使用；没有引入 RTOS。
+App 首页版本标记仍为 v13，STM32 配置格式仍为 v2；本轮未调整包版本。
+
+## 最新验证状态（2026-10-31）
+
+- 用户反馈：除水泵、风扇、继电器相关部分外，其余 STM32 改动基本正常。
+- 水泵、风扇、继电器：由于测试条件暂不方便而未测，先搁置；不应标记为故障，也不应写成全部实测通过。
+- 主机回归：实际控制/PID/配置函数配合 GPIO、时钟和 EEPROM 模拟，32 项断言通过；修改前备份能重现风扇请求覆盖。
+- Keil 完整重编译：0 错误、8 个现有警告（Key.c 3 个、cJSON 5 个）。
+- App ArkTS 源码及资源编译通过，保留服务层 3 条现有异常处理警告。
+- 新界面已预览；用户确认长截图中的重复、断层属于截图拼接，实际页面正常。
+- 用户说明：截图采集时STM32未上电；截图仅用于界面展示，不据此新增联网故障记录。
+
+## 文档导航
+
+- [鸿蒙 App 架构与学习说明](docs/01-HarmonyOS-App-Architecture.md)
+- [调试记录与经验](docs/02-HarmonyOS-App-Debugging-Notes.md)
+- [STM32 功能模块与学习说明](docs/03-STM32-Firmware-Modules.md)
+- [当前进度与后续计划](docs/04-Project-Progress-Summary.md)
+- [AI 接手说明](docs/05-AI-Handoff.md)
+- [本轮控制修复与实测清单](docs/06-Control-Fixes-Validation.md)
+- [App 界面美化记录](docs/07-App-Visual-Refresh.md)
 - [更新日志](CHANGELOG.md)
 
-## 系统架构
+## 修改、验证与同步约定
+
+1. STM32 先修改并编译 `E:\fuchuang\code\IOT5-smart2-IOT-final`。
+2. 等用户确认效果，再把功能变更同步到本仓库的 `stm32-firmware` 脱敏副本。
+3. App 直接修改 `E:\harmony\HarmonyEmbeddedLab`。
+4. 是否提交和上传 Git 由用户明确决定，验证正常不等于自动授权上传。
+5. 真实 WiFi、OneNET 设备密钥和 App 用户密钥不得进入仓库。
+6. 源码保持 UTF-8；未明确要求时不生成 HAP，不自动烧录、不清空 EEPROM。
+
+## 构建与运行
+
+### STM32
+
+维护时使用真实配置工程：
 
 ```text
-STM32 采集环境数据
-  ↓
-ESP8266 通过 WiFi 上传 OneNET
-  ↓
-OneNET 物模型保存数据
-  ↓
-HarmonyOS App 实时显示并控制设备
+E:\fuchuang\code\IOT5-smart2-IOT-final\MDK-ARM\IOT.uvprojx
 ```
 
-## 完成进度总览
+仓库副本的 WiFi/设备密钥为占位符，不能直接用于真实联网烧录。
+第三方克隆后应按 [固件说明](stm32-firmware/README.md) 在本地填写自己的配置。
 
-| 模块                  | 状态   |
-| --------------------- | ------ |
-| STM32 传感器采集      | 已完成 |
-| ESP8266 WiFi 连接     | 已完成 |
-| OneNET MQTT 连接      | 已完成 |
-| OneNET 物模型属性上报 | 已完成 |
-| OneNET 属性下发       | 已完成 |
-| 鸿蒙 App OneNET 鉴权  | 已完成 |
-| App 数据查询          | 已完成 |
-| App 主页面显示        | 已完成 |
-| App 详情页显示        | 已完成 |
-| 在线/离线判断         | 已完成 |
-| 自动刷新              | 已完成 |
-| LED 模式控制          | 已完成 |
-| 水泵模式控制          | 已完成 |
-| 全部属性实时刷新      | 已完成 |
-| 界面美化和分组        | 已完成 |
+### HarmonyOS App
 
-## STM32 端完成情况
+使用 DevEco Studio 6.0.2、SDK 6.0.2(22) 打开工程。
+参考 `entry/src/main/ets/config/OneNetConfig.sample.ets` 创建本地 `OneNetConfig.ets`；真实配置文件已忽略。
+App 使用 OneNET 用户级凭据，固件使用设备级凭据，两者不能混用。
 
-### 数据采集
+### 主机回归测试
 
-- [x] DHT11 空气温湿度
-- [x] 土壤湿度
-- [x] 光照强度
-- [x] CO2 浓度
-- [x] 水量计算
-- [x] 阈值参数
+参见 [测试说明](stm32-firmware/tests/README.md)。测试直接编译相关生产 C 函数并模拟硬件，不需要连接开发板。
 
-### 本地控制
+## 已知限制与下一步
 
-- [x] LED PWM 调光
-- [x] LED 自动 PID 模式
-- [x] 水泵手动模式
-- [x] 水泵自动灌溉模式
-- [x] 按键控制
-- [x] OLED 多页面显示
-- [x] 蜂鸣器异常报警
-
-### 云平台通信
-
-- [x] ESP8266 AT 指令初始化
-- [x] WiFi 连接，要求 2.4GHz
-- [x] OneNET MQTT 鉴权
-- [x] 物模型属性上报
-- [x] 属性 set 订阅
-- [x] LED 云端控制
-- [x] 水泵云端控制
-- [x] set_reply 回复
-
-## HarmonyOS App 完成情况
-
-### 基础设施
-
-- [x] OneNET 旧版 API 接入
-- [x] 用户级 author_key 鉴权
-- [x] HMAC-SHA1 签名
-- [x] HTTP 缓存关闭
-- [x] 纯 ArkTS HMAC-SHA1 实现
-
-### 主页面
-
-- [x] 顶部仪表盘
-- [x] 在线设备数量
-- [x] 版本号
-- [x] 最后同步时间
-- [x] 自动刷新开关
-- [x] 立即刷新
-- [x] 环境节点卡片
-- [x] 温度、湿度、数据项
-- [x] 在线/离线状态
-
-### 详情页
-
-- [x] 设备头部信息
-- [x] 环境数据卡片
-- [x] LED 模式控制
-- [x] 水泵模式控制
-- [x] 阈值设置
-- [x] 全部属性实时刷新
-- [x] 手动刷新
-- [x] 自动刷新
-
-### 状态处理
-
-- [x] 在线状态按 30 秒内最后上报判断
-- [x] 设备离线后自动显示离线
-- [x] 空数据时保留上次成功值
-- [x] 控制完成后自动回读状态
-
-## 当前已实现的控制链路
-
-### LED 控制
-
-```text
-App 详情页 LED 按钮
-  ↓
-OneNET set-device-property
-  ↓
-STM32 property/set
-  ↓
-LED_Set(mode)
-  ↓
-LED 模式变化
-  ↓
-STM32 下一次属性上报
-  ↓
-App 显示新模式
-```
-
-支持模式：
-
-- 关闭
-- 常亮
-- 自动 PID
-
-### 水泵控制
-
-```text
-App 详情页水泵按钮
-  ↓
-OneNET set-device-property
-  ↓
-STM32 property/set
-  ↓
-Bump_Set(mode)
-  ↓
-Bump_Control() 控制水泵
-  ↓
-STM32 下一次属性上报
-  ↓
-App 显示新模式
-```
-
-支持模式：
-
-- 关闭
-- 标准/开启
-- 自动灌溉
-
-## 已解决的关键问题
-
-### OneNET 鉴权
-
-- 新版 DMP 接口不匹配
-- 旧版 `iot-api.heclouds.com` 正确
-- author_key 失效后已更新
-
-### ArkTS 签名
-
-- `newByteLength` 越界
-- 改用 `util.Base64Helper`
-- 改用纯 ArkTS HMAC-SHA1
-
-### STM32 / ESP8266
-
-- USART2 首字节丢失
-- `UsartPrintf` 死循环
-- CWJAP 超时太短
-- 手机热点 5GHz 导致 ESP8266 无法连接
-- 切换 2.4GHz 后成功
-
-### OneNET 物模型
-
-- 属性上报缺少 `"version":"1.0"`
-- 补上后数据进入物模型
-
-### App 刷新
-
-- HTTP GET 缓存
-- 带参数 `@Builder` 不刷新
-- `ForEach` key 不变
-- 在线状态使用陈旧数据
-- 详情页刷新被 `isRealDevice` 拦截
-
-### 水泵控制
-
-- STM32 的 `bump` 分支为空
-- 增加 `Bump_Set()` 调用后解决
-
-## 待办事项
-
-### 高优先级
-
-- [ ] STM32 最终固件重新编译、烧录、复测
-- [ ] 验证水泵三种模式在实体水泵上的效果
-- [ ] 验证 LED 和 App 状态完全同步
-- [ ] 验证设备断电后 App 在 30 秒左右显示离线
-
-### 中优先级
-
-- [ ] 增加温湿度历史曲线
-- [ ] 增加阈值参数下发
-- [ ] 增加网络异常自动重试
-- [ ] 增加 MQTT 断线重连
-- [ ] 增加 App 启动时自动恢复上次状态
-
-### 低优先级 / 优化
-
-- [ ] 深色模式
-- [ ] 多设备管理
-- [ ] 下拉刷新
-- [ ] 设备离线告警
-- [ ] 后端代理 OneNET 密钥
-- [ ] 代码注释和模块重构
-
-## 后续升级方向
-
-### 功能方向
-
-- 历史数据曲线
-- 阈值远程配置
-- 多设备管理
-- 告警推送
-- 数据导出
-
-### 界面方向
-
-- 更完整的仪表盘
-- 图表组件
-- 动画和过渡
-- 深色模式
-- 更精细的状态卡片
-
-### 架构方向
-
-- 把 OneNET 密钥和 Token 生成移到后端
-- 增加本地缓存和离线数据
-- 拆分更多可复用组件
-- 增加单元测试和接口测试
-
-## 项目结论
-
-当前项目已经完成了从 STM32 数据采集到 OneNET 云端存储，再到 HarmonyOS App 实时显示和双向控制的完整闭环。
-
-这标志着项目从“能连接”进入了“能监控、能控制、可继续扩展”的阶段。
-
-下一阶段重点是：
-
-1. 硬件端稳定性
-2. 数据可视化
-3. 多设备与告警
-4. 安全性和后端化
+- `water_vol` 是估算补水量，不是实际测得的出水量。
+- `sensor_status` 仅使用 bit0 温度、bit1 湿度、bit3 CO2，正常通常为 11；光照/土壤/水量不判断拔插有效性。
+- 灯带与光照传感器的光学耦合仍受实际布置限制，PID 未完成实际整定。
+- 图表保留最近 20 次查询样本，时间戳去重尚未实现。
+- 下一步候选是统一数据模型和进一步分离算法/驱动；**尚未开始实施**。

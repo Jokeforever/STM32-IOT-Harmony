@@ -2,6 +2,31 @@
 
 这是 HarmonyOS + STM32 + OneNET 物联网项目中的 STM32 固件工程。
 
+## 修改、验证与同步约定
+
+1. STM32 先修改并编译 `E:\fuchuang\code\IOT5-smart2-IOT-final`。
+2. 等用户确认效果，再把功能变更同步到本仓库的 `stm32-firmware` 脱敏副本。
+3. App 直接修改 `E:\harmony\HarmonyEmbeddedLab`。
+4. 是否提交和上传 Git 由用户明确决定，验证正常不等于自动授权上传。
+5. 真实 WiFi、OneNET 设备密钥和 App 用户密钥不得进入仓库。
+6. 源码保持 UTF-8；未明确要求时不生成 HAP，不自动烧录、不清空 EEPROM。
+
+## 最新验证状态（2026-10-31）
+
+- 用户反馈：除水泵、风扇、继电器相关部分外，其余 STM32 改动基本正常。
+- 水泵、风扇、继电器：由于测试条件暂不方便而未测，先搁置；不应标记为故障，也不应写成全部实测通过。
+- 主机回归：实际控制/PID/配置函数配合 GPIO、时钟和 EEPROM 模拟，32 项断言通过；修改前备份能重现风扇请求覆盖。
+- Keil 完整重编译：0 错误、8 个现有警告（Key.c 3 个、cJSON 5 个）。
+- App ArkTS 源码及资源编译通过，保留服务层 3 条现有异常处理警告。
+- 新界面已预览；用户确认长截图中的重复、断层属于截图拼接，实际页面正常。
+- 用户说明：截图采集时STM32未上电；截图仅用于界面展示，不据此新增联网故障记录。
+
+## 最近维护入口
+
+- 配置：modules/middleware/src/mw_config.c；滤波：modules/middleware/src/mw_filter.c。
+- 模拟回归：tests/run_control_regressions.py，使用方法见tests/README.md。
+- 完整修复与硬件待测项目见仓库docs/06。
+
 ## 1. 目录结构
 
 ```text

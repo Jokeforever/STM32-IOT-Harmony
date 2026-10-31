@@ -46,6 +46,11 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
+#define SENSOR_VALID_TEMP (1U << 0)
+#define SENSOR_VALID_HUMI (1U << 1)
+#define SENSOR_VALID_CO2  (1U << 3)
+
+extern uint8_t sensor_valid;
 
 /* USER CODE END EM */
 

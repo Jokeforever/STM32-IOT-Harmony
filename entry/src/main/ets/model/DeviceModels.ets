@@ -103,7 +103,7 @@ export class PropertyHelper {
     } else if (identifier === 'moist') {
       return '土壤湿度';
     } else if (identifier === 'water_vol') {
-      return '水量';
+      return '估算补水量';
     } else if (identifier === 'led') {
       return 'LED 模式';
     } else if (identifier === 'bump') {
@@ -132,6 +132,8 @@ export class PropertyHelper {
       identifier === 'droughtthrehold'
     ) {
       return '%';
+    } else if (identifier === 'water_vol') {
+      return 'L';
     } else if (identifier === 'light') {
       return 'lx';
     } else if (
@@ -197,7 +199,7 @@ export class PropertyHelper {
     if (value === '0') {
       return '关闭';
     } else if (value === '1') {
-      return '开启';
+      return '脉冲灌溉';
     } else if (value === '2') {
       return '自动';
     }

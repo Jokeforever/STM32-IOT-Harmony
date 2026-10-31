@@ -173,7 +173,7 @@ static void Config_UpgradeV1(DeviceConfig *out, const DeviceConfigV1 *in)
     out->soil_high = in->soil_high;
     out->soil_wet_adc = in->soil_wet_adc;
     out->soil_dry_adc = in->soil_dry_adc;
-    out->pid_target_lux = 500;
+    out->pid_target_lux = LED_DEFAULT_TARGET_LUX;
     out->pid_dead_zone = 20U;
     out->pid_kp_x1000 = 1500;
     out->pid_ki_x1000 = 0;
@@ -230,7 +230,7 @@ static void Config_SetDefault(void)
     g_device_config.soil_high = HUMI_THRESHOLD_HIGH;
     g_device_config.soil_wet_adc = 1241U;
     g_device_config.soil_dry_adc = 4095U;
-    g_device_config.pid_target_lux = 500;
+    g_device_config.pid_target_lux = LED_DEFAULT_TARGET_LUX;
     g_device_config.pid_dead_zone = 20U;
     g_device_config.pid_kp_x1000 = 1500;
     g_device_config.pid_ki_x1000 = 0;
@@ -281,7 +281,7 @@ static void Config_Sanitize(DeviceConfig *config)
     }
     if ((config->pid_target_lux < 0) || (config->pid_target_lux > 999))
     {
-        config->pid_target_lux = 500;
+        config->pid_target_lux = LED_DEFAULT_TARGET_LUX;
     }
     if (config->pid_dead_zone > 200U)
     {

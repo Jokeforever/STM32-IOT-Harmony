@@ -8,156 +8,104 @@ import {
 } from '../model/DeviceModels';
 import { OneNetApiService } from '../service/OneNetApiService';
 
+import { AppTheme } from '../theme/AppTheme';
+import { MetricCard, OfflineNotice, SectionHeading, StatusBadge, SyncErrorCard, SyncToolbar } from '../components/MonitorComponents';
+
 @Component
 struct DeviceCard {
   @Prop name: string = '环境节点';
   @Prop online: boolean = false;
-  @Prop temperature: number = 0;
-  @Prop humidity: number = 0;
+  @Prop known: boolean = false;
   @Prop propertyCount: number = 0;
-  @Prop lastSyncTime: string = '--';
   onOpenDetail?: () => void;
 
   build() {
-    Column() {
-      Row() {
-        Stack() {
-          Circle()
-            .width(44)
-            .height(44)
-            .fill('#E8F1FF')
-
-          Text('🌱')
-            .fontSize(22)
-        }
-        .width(44)
-        .height(44)
-        .alignContent(Alignment.Center)
-
-        Column() {
+    Column({ space: 18 }) {
+      Row({ space: 12 }) {
+        Image($r('app.media.monitor_leaf'))
+          .width(48).height(48).padding(11)
+          .backgroundColor(AppTheme.pale).borderRadius(16)
+          .accessibilityLevel('no')
+        Column({ space: 5 }) {
           Text(this.name)
-            .fontSize(16)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#101828')
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-          Text('最后同步 ' + this.lastSyncTime)
-            .fontSize(11)
-            .fontColor('#8A94A6')
-            .margin({ top: 2 })
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .fontSize(18).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text('环境监测与智能控制').fontSize(12).fontColor(AppTheme.secondary)
         }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-        .margin({ left: 10 })
-
-        Text(this.online ? '在线' : '离线')
-          .fontSize(11)
-          .fontColor(this.online ? '#0F9D58' : '#D92D20')
-          .backgroundColor(this.online ? '#E9F7EF' : '#FEECEB')
-          .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-          .borderRadius(10)
+        .layoutWeight(1).alignItems(HorizontalAlign.Start)
+        StatusBadge({ online: this.online, known: this.known })
       }
       .width('100%')
-
+      Divider().color(AppTheme.border)
       Row() {
-        Column() {
-          Text(this.temperature.toString() + '℃')
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#1D2939')
-          Text('温度')
-            .fontSize(11)
-            .fontColor('#8A94A6')
-            .margin({ top: 2 })
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Center)
-
-        Column() {
-          Text(this.humidity.toString() + '%')
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#1D2939')
-          Text('湿度')
-            .fontSize(11)
-            .fontColor('#8A94A6')
-            .margin({ top: 2 })
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Center)
-
-        Column() {
-          Text(this.propertyCount.toString() + '项')
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#1D2939')
-          Text('数据项')
-            .fontSize(11)
-            .fontColor('#8A94A6')
-            .margin({ top: 2 })
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Center)
+        Text(this.propertyCount > 0 ? this.propertyCount.toString() + ' 项设备属性' : '等待首次同步')
+          .fontSize(13).fontColor(AppTheme.secondary).layoutWeight(1)
+        Text('查看与控制').fontSize(14).fontWeight(FontWeight.Medium).fontColor(AppTheme.primary)
+        Image($r('app.media.monitor_arrow')).width(18).height(18).margin({ left: 6 })
+          .accessibilityLevel('no')
       }
       .width('100%')
-      .margin({ top: 12 })
-
-      Row() {
-        Text('查看详情')
-          .fontSize(13)
-          .fontColor('#1D6FE8')
-
-        Blank()
-
-        Text('→')
-          .fontSize(16)
-          .fontColor('#1D6FE8')
-      }
-      .width('100%')
-      .margin({ top: 10 })
-      .onClick(() => {
-        if (this.onOpenDetail) {
-          this.onOpenDetail();
-        }
-      })
     }
-    .width('100%')
-    .padding(14)
-    .backgroundColor(Color.White)
-    .borderRadius(16)
-    .shadow({
-      radius: 10,
-      color: '#0F1D2939',
-      offsetX: 0,
-      offsetY: 3
-    })
+    .width('100%').padding(18).backgroundColor(AppTheme.surface)
+    .border({ width: 1, color: AppTheme.border }).borderRadius(22)
+    .accessibilityText('查看' + this.name + '详情与控制')
+    .onClick(() => { if (this.onOpenDetail) { this.onOpenDetail(); } })
   }
 }
 
 @Component
-struct StatChip {
-  @Prop label: string = '';
-  @Prop value: string = '--';
+struct HomeOverview {
+  @Prop temperature: string = '--';
+  @Prop humidity: string = '--';
+  @Prop online: boolean = false;
+  @Prop known: boolean = false;
 
   build() {
-    Column() {
-      Text(this.value)
-        .fontSize(15)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Color.White)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-      Text(this.label)
-        .fontSize(10)
-        .fontColor('#DDEBFF')
-        .margin({ top: 2 })
+    Column({ space: 24 }) {
+      Row({ space: 10 }) {
+        Image($r('app.media.monitor_leaf_light')).width(24).height(24)
+          .accessibilityLevel('no')
+        Text('环境总览').fontSize(16).fontWeight(FontWeight.Medium)
+          .fontColor('#E5F0E5').layoutWeight(1)
+        StatusBadge({ online: this.online, known: this.known, dark: true })
+      }
+      .width('100%')
+      Row({ space: 16 }) {
+        Column({ space: 6 }) {
+          Text('空气温度').fontSize(13).fontColor('#B9D1BE')
+          Row({ space: 4 }) {
+            Text(this.temperature).fontSize(42).fontWeight(FontWeight.Bold)
+              .fontColor('#F8FCF4').maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (this.temperature !== '--') {
+              Text('℃').fontSize(16).fontColor('#BED9C5').margin({ bottom: 7 })
+            }
+          }
+          .alignItems(VerticalAlign.Bottom)
+        }
+        .layoutWeight(1).alignItems(HorizontalAlign.Start)
+        Divider().vertical(true).height(48).color('#39624B')
+        Column({ space: 6 }) {
+          Text('空气湿度').fontSize(13).fontColor('#B9D1BE')
+          Row({ space: 4 }) {
+            Text(this.humidity).fontSize(42).fontWeight(FontWeight.Bold)
+              .fontColor('#F8FCF4').maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (this.humidity !== '--') {
+              Text('%').fontSize(16).fontColor('#BED9C5').margin({ bottom: 7 })
+            }
+          }
+          .alignItems(VerticalAlign.Bottom)
+        }
+        .layoutWeight(1).alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+      Text(this.known ? '最近一次上报的数据快照' : '连接设备后，在这里查看环境变化')
+        .fontSize(12).fontColor('#B9D1BE').width('100%')
     }
-    .layoutWeight(1)
-    .alignItems(HorizontalAlign.Center)
+    .width('100%').padding(22).borderRadius(26)
+    .backgroundColor(AppTheme.forest)
+    .linearGradient({ angle: 125, colors: [['#173F32', 0], ['#2F6347', 1]] })
   }
 }
 
@@ -445,178 +393,111 @@ struct Index {
       })
   }
 
+  private displayValue(identifier: string): string {
+    return PropertyHelper.formatValue(identifier, PropertyHelper.getValue(this.properties, identifier));
+  }
+
   build() {
     Navigation(this.pageStack) {
-      Column() {
-        // ===== 顶部仪表盘 =====
+      Scroll() {
         Column() {
           Row() {
-            Column() {
-              Text('智慧农业监控')
-                .fontSize(24)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(Color.White)
-
-              Text('OneNET 物联网设备监控台')
-                .fontSize(13)
-                .fontColor('#DDEBFF')
-                .margin({ top: 4 })
-            }
-            .layoutWeight(1)
-            .alignItems(HorizontalAlign.Start)
-
-            Button(this.loading ? '同步中' : '同步')
-              .fontSize(13)
-              .height(36)
-              .backgroundColor(Color.White)
-              .fontColor('#1D6FE8')
-              .enabled(!this.loading)
-              .onClick(() => {
-                this.syncOneNet();
-              })
+            Text('SMART GROW').fontSize(11).letterSpacing(2)
+              .fontWeight(FontWeight.Bold).fontColor(AppTheme.primary).layoutWeight(1)
+            Text(this.appVersion).fontSize(12).fontColor(AppTheme.secondary)
+              .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+              .backgroundColor('#E8EEE5').borderRadius(12)
           }
           .width('100%')
+          Text('智慧农业工作台').fontSize(28).fontWeight(FontWeight.Bold)
+            .fontColor(AppTheme.ink).width('100%').margin({ top: 10 })
+          Text('感知环境，让每一次照料更从容。').fontSize(14)
+            .fontColor(AppTheme.secondary).width('100%').margin({ top: 7, bottom: 22 })
 
-          Row() {
-            StatChip({
-              label: '在线设备',
-              value: this.deviceOnline ? '1/1' : '0/1'
-            })
-            StatChip({
-              label: '版本号',
-              value: this.appVersion
-            })
-            StatChip({
-              label: '最后同步',
-              value: this.lastSyncTime
-            })
-          }
-          .width('100%')
-          .margin({ top: 16 })
-        }
-        .width('92%')
-        .padding(16)
-        .margin({ top: 12 })
-        .backgroundColor('#1D6FE8')
-        .borderRadius(18)
-        .shadow({
-          radius: 16,
-          color: '#331D6FE8',
-          offsetX: 0,
-          offsetY: 6
-        })
+          HomeOverview({
+            temperature: this.displayValue('temp'),
+            humidity: this.displayValue('humi'),
+            online: this.deviceOnline,
+            known: this.lastReportTime > 0
+          })
 
-        // ===== 错误提示 =====
-        if (this.errorMessage !== '') {
-          Row() {
-            Text('!')
-              .fontSize(13)
-              .fontColor(Color.White)
-              .textAlign(TextAlign.Center)
-              .width(20)
-              .height(20)
-              .backgroundColor('#D92D20')
-              .borderRadius(10)
-
-            Text(this.errorMessage)
-              .fontSize(12)
-              .fontColor('#B42318')
-              .layoutWeight(1)
-              .margin({ left: 8 })
-              .maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-            Button('关闭')
-              .fontSize(11)
-              .height(28)
-              .backgroundColor(Color.Transparent)
-              .fontColor('#B42318')
-              .onClick(() => {
-                this.errorMessage = '';
-              })
-          }
-          .width('92%')
-          .padding(10)
-          .margin({ top: 10 })
-          .backgroundColor('#FEF3F2')
-          .borderRadius(10)
-        }
-
-        // ===== 离线告警 =====
-        if (!this.deviceOnline && this.lastReportTime > 0) {
-          Row() {
-            Text('⚠')
-              .fontSize(14)
-              .fontColor('#B42318')
-
-            Text('设备离线：最后在线 ' + this.lastOnlineTime)
-              .fontSize(12)
-              .fontColor('#B42318')
-              .layoutWeight(1)
-              .margin({ left: 6 })
-              .maxLines(2)
+          Row({ space: 7 }) {
+            Image($r('app.media.monitor_clock')).width(15).height(15).accessibilityLevel('no')
+            Text('最后同步').fontSize(12).fontColor(AppTheme.secondary)
+            Text(this.lastSyncTime).fontSize(12).fontColor(AppTheme.ink)
+              .layoutWeight(1).textAlign(TextAlign.End).maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
-          .width('92%')
-          .padding(10)
-          .margin({ top: 10 })
-          .backgroundColor('#FEF3F2')
-          .border({ width: 1, color: '#FDA29B' })
-          .borderRadius(10)
-        }
+          .width('100%').padding({ top: 14, bottom: 14 })
 
-        // ===== 刷新控制 =====
-        Row() {
-          Button(this.autoRefresh ? '自动刷新：开' : '自动刷新：关')
-            .fontSize(12)
-            .height(32)
-            .layoutWeight(1)
-            .backgroundColor(this.autoRefresh ? '#E8F1FF' : '#F2F4F7')
-            .fontColor(this.autoRefresh ? '#1D6FE8' : '#667085')
-            .onClick(() => {
-              this.autoRefresh = !this.autoRefresh;
-              if (this.autoRefresh) {
+          if (this.errorMessage !== '') {
+            SyncErrorCard({ message: this.errorMessage }).margin({ bottom: 12 })
+          }
+          if (!this.deviceOnline && this.lastReportTime > 0) {
+            OfflineNotice({ lastOnline: this.lastOnlineTime }).margin({ bottom: 12 })
+          }
+
+          SyncToolbar({
+            autoRefresh: this.autoRefresh,
+            loading: this.loading,
+            onToggle: (enabled: boolean) => {
+              this.autoRefresh = enabled;
+              if (enabled) {
                 this.startAutoRefresh();
                 this.syncOneNet();
               } else {
                 this.stopAutoRefresh();
               }
-            })
+            },
+            onRefresh: () => { this.syncOneNet(); }
+          })
 
-          Button('立即刷新')
-            .fontSize(12)
-            .height(32)
-            .layoutWeight(1)
-            .margin({ left: 8 })
-            .enabled(!this.loading)
-            .onClick(() => {
-              this.syncOneNet();
-            })
-        }
-        .width('92%')
-        .margin({ top: 10 })
-
-        // ===== 设备卡片 =====
-        DeviceCard({
-          name: this.deviceName,
-          online: this.deviceOnline,
-          temperature: this.temperature,
-          humidity: this.humidity,
-          propertyCount: this.properties.length,
-          lastSyncTime: this.lastSyncTime,
-          onOpenDetail: () => {
-            this.openDetail();
+          SectionHeading({ title: '环境速览', caption: '最近一次上报' })
+          Row({ space: 8 }) {
+            MetricCard({ label: '光照', value: this.displayValue('light'), unit: 'lx',
+              icon: $r('app.media.monitor_sun'), accent: '#AA7C31', tint: '#FBF2DD', compact: true })
+            MetricCard({ label: 'CO₂', value: this.displayValue('ppm'), unit: 'ppm',
+              icon: $r('app.media.monitor_air'), accent: '#677BA0', tint: '#EEF1F8', compact: true })
+            MetricCard({ label: '土壤湿度', value: this.displayValue('moist'), unit: '%',
+              icon: $r('app.media.monitor_soil'), accent: '#467C59', tint: '#ECF4EB', compact: true })
           }
-        })
-          .width('92%')
-          .margin({ top: 12 })
+          .width('100%')
 
-        Blank()
+          SectionHeading({ title: '我的设备', caption: '1 个环境节点' })
+          DeviceCard({
+            name: this.deviceName,
+            online: this.deviceOnline,
+            known: this.lastReportTime > 0,
+            propertyCount: this.properties.length,
+            onOpenDetail: () => { this.openDetail(); }
+          })
 
+          Row({ space: 14 }) {
+            Column({ space: 7 }) {
+              Text('照明模式').fontSize(12).fontColor(AppTheme.secondary)
+              Text(this.displayValue('led')).fontSize(16).fontWeight(FontWeight.Medium)
+                .fontColor(AppTheme.ink)
+            }
+            .layoutWeight(1).alignItems(HorizontalAlign.Start)
+            Divider().vertical(true).height(32).color(AppTheme.border)
+            Column({ space: 7 }) {
+              Text('灌溉模式').fontSize(12).fontColor(AppTheme.secondary)
+              Text(this.displayValue('bump')).fontSize(16).fontWeight(FontWeight.Medium)
+                .fontColor(AppTheme.ink)
+            }
+            .layoutWeight(1).alignItems(HorizontalAlign.Start)
+          }
+          .width('100%').padding(18).margin({ top: 12 })
+          .backgroundColor('#ECF1E9').borderRadius(20)
+
+          Text('首页展示最近一次成功同步的数据。')
+            .fontSize(12).fontColor(AppTheme.muted).margin({ top: 20 })
+        }
+        .width('100%').alignItems(HorizontalAlign.Start)
+        .padding({ left: 20, right: 20, top: 24, bottom: 30 })
       }
-      .width('100%')
-      .height('100%')
-      .backgroundColor('#F4F7FB')
+      .width('100%').height('100%').scrollBar(BarState.Off)
+      .backgroundColor(AppTheme.background)
     }
     .mode(NavigationMode.Stack)
     .navDestination(this.deviceDetailPage)

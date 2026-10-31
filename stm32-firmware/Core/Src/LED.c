@@ -51,7 +51,7 @@ void LED_Set( int mode)
 void LED_Init(void)
 {
     led_ctrl.enabled = 1;
-    led_ctrl.target_lux = 200;
+    led_ctrl.target_lux = LED_DEFAULT_TARGET_LUX;
     led_ctrl.k_p = 1.5f;
     led_ctrl.k_i = 0.0f;
     led_ctrl.k_d = 0.0f;
@@ -84,6 +84,7 @@ void LED_Update(int16_t current_lux)
     float integral_limit;
     int32_t new_pwm;
     uint32_t now;
+    uint32_t elapsed_ms;
 
     if (!led_ctrl.enabled)
     {
@@ -111,15 +112,19 @@ void LED_Update(int16_t current_lux)
         return;
     }
 
-    dt = (float)(now - led_ctrl.last_tick) / 1000.0f;
-    if (dt < 0.001f)
+    elapsed_ms = now - led_ctrl.last_tick;
+    if (elapsed_ms == 0U)
     {
-        dt = 0.001f;
+        return;
     }
-    if (dt > 0.100f)
+    if (elapsed_ms > LED_PID_MAX_GAP_MS)
     {
-        dt = 0.100f;
+        /* 长时间网络等待后重建历史，避免积分突增和微分冲击。 */
+        led_ctrl.integral = 0.0f;
+        led_ctrl.last_error = error;
+        elapsed_ms = LED_CONTROL_INTERVAL_MS;
     }
+    dt = (float)elapsed_ms / 1000.0f;
 
     led_ctrl.integral += error * dt;
 
@@ -163,6 +168,7 @@ void LED_Update(int16_t current_lux)
 }
 
 void LED_SetPWM(int16_t pwm) {
+    if (pwm < 0) pwm = 0;
     if (pwm > PWM_MAX) pwm = PWM_MAX;
     __HAL_TIM_SET_COMPARE(&PWM_TIMER, PWM_CHANNEL, pwm);
     led_ctrl.pwm_value = pwm;

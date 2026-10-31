@@ -54,7 +54,7 @@ void IS_Normal(void)
 				abnormal[i] = NONE;
 				break;
 			case 2:
-			if(ppm>CO2_Threhold)
+			if(((sensor_valid & SENSOR_VALID_CO2) != 0U) && (ppm > CO2_Threhold))
 			{
 				abnormal[i] = HIGHCO2;
 
@@ -95,16 +95,7 @@ void Handler(void)
 						BEEP_OFF;
 				}
 				break;
-			case 2:
-				if(abnormal[i] == HIGHCO2)
-				{
-					FAN_ON;
-				}
-				else
-				{
-					FAN_OFF;
-				}
-				break;
+			/* 风扇由 Monitor_Temp() 统一合并温度和 CO2 请求。 */
 		}
 	}
 }

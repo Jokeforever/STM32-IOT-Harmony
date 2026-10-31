@@ -24,6 +24,9 @@ void LED_Set(int mode);
 #define PWM_TIMER    htim3
 #define PWM_CHANNEL     TIM_CHANNEL_2
 #define PWM_MAX        1000  /* 对应100%占空比 */
+#define LED_DEFAULT_TARGET_LUX 200
+#define LED_CONTROL_INTERVAL_MS 1000U
+#define LED_PID_MAX_GAP_MS (5U * LED_CONTROL_INTERVAL_MS)
 
 /* 控制结构体 */
 typedef struct {
