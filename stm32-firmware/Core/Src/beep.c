@@ -1,3 +1,4 @@
+#include "app_sensors.h"
 #include "beep.h"
 
 
@@ -10,7 +11,6 @@ void Beep_Init(void)
 
 }
 
-extern uint16_t light,moist,ppm;
 extern volatile Abnormal abnormal[3];
 extern volatile DisplayScreen CurrentScreen;
 extern uint16_t CO2_Threhold ;
@@ -21,17 +21,18 @@ extern Bump_Mode CurrentBump_mode;
 
 void IS_Normal(void)
 {
+    const SensorData *sensors = SensorService_GetData();
 	for(int i = 0; i<3;i++)
 	{
 		switch(i)
 		{
 			case 0:
-				if(light > LDR_threhold[1])
+				if(sensors->light_lux > LDR_threhold[1])
 				{
 					abnormal[i] = BRIGHT;
 
 				}
-			else if(light<LDR_threhold[0])
+			else if(sensors->light_lux<LDR_threhold[0])
 			{
 				abnormal[i] = DARK;
 
@@ -40,12 +41,12 @@ void IS_Normal(void)
 			abnormal[i] = NONE;
 				break;
 			case 1:
-			if(moist> Bump_threhold[1])
+			if(sensors->soil_moisture_pct> Bump_threhold[1])
 			{
 				abnormal[i] = DAMP;
 
 			}
-			else if(moist< Bump_threhold[0]   )
+			else if(sensors->soil_moisture_pct< Bump_threhold[0]   )
 			{
 				abnormal[i] = DROUGHT;
 
@@ -54,7 +55,7 @@ void IS_Normal(void)
 				abnormal[i] = NONE;
 				break;
 			case 2:
-			if(((sensor_valid & SENSOR_VALID_CO2) != 0U) && (ppm > CO2_Threhold))
+			if(((sensors->valid_mask & SENSOR_VALID_CO2) != 0U) && (sensors->co2_ppm > CO2_Threhold))
 			{
 				abnormal[i] = HIGHCO2;
 

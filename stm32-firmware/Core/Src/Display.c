@@ -1,8 +1,7 @@
+#include "app_sensors.h"
 #include "Display.h"
 
 //extern   uint8_t Key1,Key2 ;
-extern uint8_t temp,humi;
-extern uint16_t light,ppm,moist;
 extern float water_vol ;
 extern volatile DisplayScreen CurrentScreen;
 extern volatile Abnormal abnormal[3];
@@ -77,14 +76,15 @@ void Display5_Init(void)
 //数据刷新显示1，2
 void Refresh1_Data(void)
 {
+    const SensorData *sensors = SensorService_GetData();
 		char buf1[10];
-		sprintf(buf1,":%2d  ",temp);
+		sprintf(buf1,":%2d  ",sensors->temperature_c);
 		OLED_ShowString(36,0,(uint8_t*)buf1,16); 
 	
-		sprintf(buf1,":%2d  ",humi);	
+		sprintf(buf1,":%2d  ",sensors->humidity_pct);
 		OLED_ShowString(36,3,(uint8_t*)buf1,16);  
 	
-		sprintf(buf1,":%2d  ",ppm);	
+		sprintf(buf1,":%2d  ",sensors->co2_ppm);
 		OLED_ShowString(36,6,(uint8_t*)buf1,16);  
 	
 
@@ -92,9 +92,10 @@ void Refresh1_Data(void)
 
 void Refresh2_Data(void)
 {
+    const SensorData *sensors = SensorService_GetData();
 		char buf2[10];
 	
-		sprintf(buf2,":%2d ",light);	
+		sprintf(buf2,":%2d ",sensors->light_lux);
 		OLED_ShowString(36,0,(uint8_t*)buf2,16);  
 	
 		LED_Display();
@@ -104,9 +105,10 @@ void Refresh2_Data(void)
 
 void Refresh3_Data(void)
 {
+    const SensorData *sensors = SensorService_GetData();
 		char buf3[10];
 	
-		sprintf(buf3,":%2d  ",moist);	
+		sprintf(buf3,":%2d  ",sensors->soil_moisture_pct);
 		OLED_ShowString(72,0,(uint8_t*)buf3,16);  
 	
 		Bump_Display();

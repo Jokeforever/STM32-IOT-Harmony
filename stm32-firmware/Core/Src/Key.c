@@ -3,9 +3,6 @@
 
 extern volatile DisplayScreen CurrentScreen;
 //extern   uint8_t Key1,Key2 ;
-extern uint8_t temp,humi;
-extern uint16_t light;
-extern uint16_t ppm;     
 
 extern uint32_t watertime;
 extern Bump_Mode CurrentBump_mode ;
@@ -256,10 +253,10 @@ void Key_Func(void)
 					LDR_threhold[1]= LDR_threhold[0];
 					break;
 				case 2:
-					if(temp_threhold>0)
-						temp_threhold-=TEMP_STEP;
+					if(temp_threhold >= TEMP_STEP)
+						temp_threhold -= TEMP_STEP;
 					else
-						temp = 0;
+						temp_threhold = 0; /* 只调整阈值，不修改实测温度；避免1减2下溢。 */
 				default:
 					Monitor_para1 = 0;
 			}

@@ -46,11 +46,8 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-#define SENSOR_VALID_TEMP (1U << 0)
-#define SENSOR_VALID_HUMI (1U << 1)
-#define SENSOR_VALID_CO2  (1U << 3)
-
-extern uint8_t sensor_valid;
+/* 有效位和数据类型由独立的数据契约定义。 */
+#include "sensor_data.h"
 
 /* USER CODE END EM */
 

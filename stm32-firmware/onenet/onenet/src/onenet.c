@@ -1,4 +1,5 @@
-﻿/*
+#include "app_sensors.h"
+/*
  * MODULE OVERVIEW
  * 文件：onenet.c
  * 作用：OneNET MQTT 鉴权、属性上报、属性下发和 set_reply。
@@ -480,9 +481,6 @@ _Bool OneNet_DevLink(void)
 	
 }
 
-extern uint8_t temp,humi;
-extern uint8_t sensor_valid;
-extern uint16_t light,moist,ppm;
 extern float water_vol;
 extern System_Mode current_mode ;
 extern Bump_Mode CurrentBump_mode;
@@ -527,18 +525,19 @@ static int OneNet_Append(char *buf, int size, int offset, const char *fmt, ...)
 
 unsigned short OneNet_FillBuf(char *buf)
 {
+	const SensorData *sensors = SensorService_GetData();
 	int len = 0;
 
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
 		"{\"id\":\"%u\",\"version\":\"1.0\",\"params\":{", one_net_msg_id++);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"temp\":{\"value\":%d},", temp);
+		"\"temp\":{\"value\":%d},", sensors->temperature_c);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"humi\":{\"value\":%d},", humi);
+		"\"humi\":{\"value\":%d},", sensors->humidity_pct);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"light\":{\"value\":%d},", light);
+		"\"light\":{\"value\":%d},", sensors->light_lux);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"ppm\":{\"value\":%d},", ppm);
+		"\"ppm\":{\"value\":%d},", sensors->co2_ppm);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
 		"\"water_vol\":{\"value\":%.1f},", water_vol);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
@@ -554,9 +553,9 @@ unsigned short OneNet_FillBuf(char *buf)
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
 		"\"tempthrehold\":{\"value\":%d},", temp_threhold);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"sensor_status\":{\"value\":%d},", (int)sensor_valid);
+		"\"sensor_status\":{\"value\":%d},", (int)sensors->valid_mask);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"moist\":{\"value\":%d}", moist);
+		"\"moist\":{\"value\":%d}", sensors->soil_moisture_pct);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len, "}}");
 
 	if (len <= 0 || len >= ONENET_JSON_BUF_SIZE)

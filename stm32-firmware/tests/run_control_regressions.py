@@ -7,9 +7,11 @@ import shutil
 import tempfile
 parser = argparse.ArgumentParser(description='Windows native regression tests; no hardware required.')
 parser.add_argument('--clang', default=shutil.which('clang') or r'F:\DEVECO\DevEco Studio\sdk\default\openharmony\native\llvm\bin\clang.exe')
+parser.add_argument('--firmware-root', type=Path, default=Path(__file__).resolve().parents[1])
+parser.add_argument('--overlay', type=Path)
 args = parser.parse_args()
-REAL = Path(__file__).resolve().parents[1]
-STAGED = REAL
+REAL = args.firmware_root
+STAGED = args.overlay or REAL
 CLANG = Path(args.clang)
 temporary = tempfile.TemporaryDirectory(prefix='stm32-control-tests-')
 OUT = Path(temporary.name)
@@ -27,11 +29,16 @@ header('stm32f1xx_hal.h', r'''
 #ifndef MOCK_HAL_H
 #define MOCK_HAL_H
 #include <stdint.h>
-typedef struct { int unused; } TIM_HandleTypeDef;
+typedef struct { void *Instance; } TIM_HandleTypeDef;
+#define TIM1 ((void *)1)
 extern TIM_HandleTypeDef htim3;
 #define GPIOA 0
 #define GPIOB 1
 #define GPIOC 2
+#define RESET 0
+#define GPIO_PIN_1 (1U << 1)
+#define GPIO_PIN_4 (1U << 4)
+int HAL_GPIO_ReadPin(int port, unsigned pin);
 #define GPIO_PIN_5 (1U << 5)
 #define GPIO_PIN_6 (1U << 6)
 #define GPIO_PIN_7 (1U << 7)
@@ -50,9 +57,11 @@ void mock_compare(unsigned value);
 ''')
 for name in ('main.h', 'fan.h', 'jdq.h', 'beep.h'):
     header(name, read('Core/Inc/' + name))
+header('sensor_data.h', read('modules/middleware/inc/sensor_data.h'))
+header('app_sensors.h', read('modules/app/inc/app_sensors.h'))
 header('LED.h', read('Core/Inc/LED.h').replace('#include "Key.h"', '#include "Key.h"\n#include "stm32f1xx_hal.h"'))
-header('Key.h', '#ifndef MOCK_KEY_H\n#define MOCK_KEY_H\ntypedef struct { int unused; } Key;\n#endif\n')
-header('oled.h', '#ifndef MOCK_OLED_H\n#define MOCK_OLED_H\nvoid OLED_ShowCHinese(int x, int y, int symbol);\n#endif\n')
+header('Key.h', '#ifndef MOCK_KEY_H\n#define MOCK_KEY_H\n#include "stm32f1xx_hal.h"\ntypedef struct { uint8_t State, Pin_state, ClickFlag, LongClickFlag; uint32_t Presstime, Releasetime; } Key;\n#define LDR_STEP 100\n#define CO2_STEP 100\n#define TEMP_STEP 2\n#define BUMP_STEP 2\nvoid Key_Func(void);\n#include "LED.h"\n#include "bump.h"\n#endif\n')
+header('oled.h', '#ifndef MOCK_OLED_H\n#define MOCK_OLED_H\nvoid OLED_Clear(void);\nvoid Display1_Init(void);\nvoid Display2_Init(void);\nvoid Display3_Init(void);\nvoid Display4_Init(void);\nvoid Display5_Init(void);\nvoid OLED_ShowCHinese(int x, int y, int symbol);\n#endif\n')
 header('usart3.h', '#include <stdint.h>\n#define CO2_THREHOLD 2000\n')
 header('bump.h', '''#ifndef MOCK_BUMP_H
 #define MOCK_BUMP_H
@@ -61,7 +70,9 @@ typedef enum { Bump_OFF=0, Bump_CALIBRATION=1, Bump_AUTO=2 } Bump_Mode;
 #define HUMI_THRESHOLD_LOW 30
 #define HUMI_THRESHOLD_HIGH 75
 typedef enum { NONE=0, BRIGHT, DARK, DAMP, DROUGHT, HIGHCO2 } Abnormal;
-typedef int DisplayScreen;
+typedef enum { DISPLAY_NONE=0, DISPLAY_SCREEN1, DISPLAY_SCREEN2, DISPLAY_SCREEN3, DISPLAY_SCREEN4, DISPLAY_SCREEN5 } DisplayScreen;
+#define BUMP_ON HAL_GPIO_WritePin(GPIOB,GPIO_PIN_1,GPIO_PIN_SET)
+#define BUMP_OFF HAL_GPIO_WritePin(GPIOB,GPIO_PIN_1,GPIO_PIN_RESET)
 #endif
 ''')
 header('mw_config.h', read('modules/middleware/inc/mw_config.h'))
@@ -80,11 +91,24 @@ harness = r'''
 #include "jdq.h"
 #include "beep.h"
 #include "mw_config.h"
+#include "app_sensors.h"
 #include <stddef.h>
 TIM_HandleTypeDef htim3;
 Key Keys[4];
-uint8_t temp=25, humi=40, sensor_valid=11, LED_Manu_PWM=50;
-uint16_t ppm=350, moist=50, light=200, CO2_Threhold=2000, Bump_threhold[2]={30,75};
+static SensorData test_data = {25,40,200,50,350,11};
+const SensorData *SensorService_GetData(void) { return &test_data; }
+#define temp test_data.temperature_c
+#define humi test_data.humidity_pct
+#define sensor_valid test_data.valid_mask
+#define ppm test_data.co2_ppm
+#define moist test_data.soil_moisture_pct
+#define light test_data.light_lux
+uint16_t CO2_Threhold=2000, Bump_threhold[2]={30,75};
+uint32_t watertime, HP_ON_MS=500, HP_OFF_MS=1500;
+uint8_t waterflag;
+volatile uint32_t time_ms, hp_ms_total, hp_ms_count, hp_state_start;
+volatile uint8_t hp_running, hp_is_on;
+extern uint8_t Monitor_para1;
 Bump_Mode CurrentBump_mode=Bump_OFF, LastBump_mode=Bump_OFF;
 extern System_Mode current_mode, last_mode;
 extern uint8_t temp_threhold;
@@ -103,6 +127,13 @@ void HAL_GPIO_WritePin(int port, unsigned mask, int value) {
 void HAL_TIM_PWM_Start(TIM_HandleTypeDef *h, int c) { (void)h; (void)c; }
 void HAL_TIM_PWM_Stop(TIM_HandleTypeDef *h, int c) { (void)h; (void)c; }
 void mock_compare(unsigned v) { pwm=v; }
+int HAL_GPIO_ReadPin(int port,unsigned pin) { (void)port;(void)pin;return 1; }
+void OLED_Clear(void) {}
+void Display1_Init(void) {}
+void Display2_Init(void) {}
+void Display3_Init(void) {}
+void Display4_Init(void) {}
+void Display5_Init(void) {}
 void OLED_ShowCHinese(int x,int y,int s) { (void)x;(void)y;(void)s; }
 void *memset(void *p,int c,size_t n) { uint8_t *b=p; while(n--) *b++=(uint8_t)c; return p; }
 void *memcpy(void *p,const void *s,size_t n) { uint8_t *b=p;const uint8_t *a=s;while(n--) *b++=*a++;return p; }
@@ -137,6 +168,16 @@ int main(void) {
     temp=24;Monitor_Temp();CHECK(pins[GPIOB][6]==GPIO_PIN_SET);
     temp_threhold=0;temp=0;Monitor_Temp();CHECK(pins[GPIOB][6]==GPIO_PIN_SET);
     temp_threhold=100;temp=100;Monitor_Temp();CHECK(pins[GPIOB][5]==GPIO_PIN_SET);
+    /* 实际按键函数：阈值0、1、2、正常值的下边界；实测温度不得被写入。 */
+    CurrentScreen=DISPLAY_SCREEN4;temp=25;
+    temp_threhold=0;Monitor_para1=2;Keys[3].ClickFlag=1;Key_Func();
+    CHECK(temp_threhold==0);CHECK(temp==25);
+    temp_threhold=1;Monitor_para1=2;Keys[3].ClickFlag=1;Key_Func();
+    CHECK(temp_threhold==0);CHECK(temp==25);
+    temp_threhold=2;Monitor_para1=2;Keys[3].ClickFlag=1;Key_Func();
+    CHECK(temp_threhold==0);CHECK(temp==25);
+    temp_threhold=25;Monitor_para1=2;Keys[3].ClickFlag=1;Key_Func();
+    CHECK(temp_threhold==23);CHECK(temp==25);
     /* PID 积分必须使用实际 0.5/1/1.5 秒，而不是全部裁成 0.1 秒。 */
     pid(0,1,0,0,100);tick=1000;LED_Update(100);CHECK(near(led_ctrl.integral,100));CHECK(pwm==100);
     pid(0,1,0,0,100);tick=500;LED_Update(100);CHECK(near(led_ctrl.integral,50));
@@ -158,7 +199,7 @@ int main(void) {
 }
 '''
 (OUT / 'test.c').write_text(harness, encoding='utf-8')
-source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','modules/middleware/src/mw_config.c']
+source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','modules/middleware/src/mw_config.c']
 sources = []
 for rel in source_rel:
     p = OUT / Path(rel).name

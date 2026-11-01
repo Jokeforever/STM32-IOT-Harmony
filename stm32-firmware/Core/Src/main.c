@@ -47,7 +47,7 @@
 
 //中间件层
 #include "mw_config.h"
-#include "mw_filter.h"
+#include "app_sensors.h"
 
 //硬件驱动
 #include "myusart.h"
@@ -103,15 +103,6 @@ extern uint16_t LDR_threhold[2];
 extern uint16_t CO2_Threhold;
 extern uint8_t LED_Manu_PWM;
 uint8_t rx_buffer[1];
-uint8_t sensor_valid = 0U;
-static uint8_t s_temp_filter_history[3] = {0};
-static uint8_t s_humi_filter_history[3] = {0};
-static uint8_t s_temp_filter_count = 0U;
-static uint8_t s_humi_filter_count = 0U;
-static uint16_t s_co2_filter_history[3] = {0};
-static uint8_t s_co2_filter_count = 0U;
-uint8_t temp = 20,humi = 40;
-uint16_t light = 200,moist= 20,ppm=350;
 float water_vol = 0.0f;
 extern uint8_t esp8266_buf[512];
 volatile Abnormal abnormal[3] = {NONE};
@@ -132,11 +123,7 @@ void Watchdog_Feed(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/* ============================================================
- * 滤波算法已抽离到 modules/middleware/src/mw_filter.c
- * 原 137-199 行的 Filter_Median3_U8 / U16 现由 mw_filter.h 提供，
- * 逻辑未做任何改动。
- * ============================================================ */
+/* 采集与滤波状态由 modules/app/src/app_sensors.c 管理。 */
 
 
 /* USER CODE END 0 */
@@ -185,6 +172,7 @@ int main(void)
 	unsigned char *dataPtr = NULL;
 	uint8_t net_retry = 0;
 	uint8_t login_retry = 0;
+	SensorService_Init();
 	Hardware_Init();
 	HAL_UART_Receive_IT(&huart1, rx_buffer, 1);
 	HAL_UART_Receive_IT(&huart2, (uint8_t *)&received_data, 1);
@@ -237,9 +225,9 @@ int main(void)
 		{
 			last_led_control_tick = HAL_GetTick();
 
-			if (LDR_LuxData(&light) != 0U)
+			if (SensorService_ReadLight() != 0U)
 			{
-				LED_Update(light);
+				LED_Update(SensorService_GetData()->light_lux);
 			}
 		}
 
@@ -260,33 +248,7 @@ int main(void)
 		if((now_tick - last_upload_tick) >= ONENET_UPLOAD_INTERVAL)	//发送间隔5s
 		{
 			last_upload_tick = now_tick;
-            (void)TS_GetData(&moist);
-
-            uint16_t raw_ppm = 0U;
-            if (CO2GetData(&raw_ppm) != 0U)
-            {
-                ppm = Filter_Median3_U16(s_co2_filter_history, &s_co2_filter_count, raw_ppm);
-                sensor_valid |= SENSOR_VALID_CO2;
-            }
-            else
-            {
-                sensor_valid &= (uint8_t)~SENSOR_VALID_CO2;
-            }
-
-            uint8_t raw_temp = 0U;
-            uint8_t raw_humi = 0U;
-            if (DHT11_Read_Data(&raw_temp,&raw_humi) == DHT11_OK)
-            {
-                temp = Filter_Median3_U8(s_temp_filter_history, &s_temp_filter_count, raw_temp);
-                humi = Filter_Median3_U8(s_humi_filter_history, &s_humi_filter_count, raw_humi);
-                sensor_valid |= (SENSOR_VALID_TEMP | SENSOR_VALID_HUMI);
-            }
-            else
-            {
-                sensor_valid &= (uint8_t)~(SENSOR_VALID_TEMP | SENSOR_VALID_HUMI);
-            }
-
-            (void)LDR_LuxData(&light);
+            SensorService_Poll();
 			OneNet_SendData();									//发送数据
 		
 			ESP8266_Clear();

@@ -11,7 +11,17 @@
 5. 真实 WiFi、OneNET 设备密钥和 App 用户密钥不得进入仓库。
 6. 源码保持 UTF-8；未明确要求时不生成 HAP，不自动烧录、不清空 EEPROM。
 
-## 最新验证状态（2026-10-31）
+## 最新验证状态（2026-11-01）
+
+- 统一传感器数据模型与采集服务已完成，用户确认文档中的五项验收测试全部通过。
+- 五项包括数据链路、光照/LED、DHT11失效恢复、App控制与掉电保存、本机温度阈值下边界。
+- 采集差分测试1000组输入、9030项断言通过；控制/PID/配置/按键回归40项通过。
+- 真实Keil工程完整编译0错误、8个既有警告；Code=48198、RO=6498、RW=188、ZI=7964。
+- 已按先真实工程、后用户确认的流程同步仓库脱敏副本，保留真实配置与仓库占位符。
+- 水泵、风扇、继电器实体测试继续暂缓；本轮五项通过不代表这三项已完成负载验证。
+- App源码未修改，协议与EEPROM格式不变；用户已授权本地提交；尚未推送Git。
+
+## 上一阶段验证记录（2026-10-31）
 
 - 用户反馈：除水泵、风扇、继电器相关部分外，其余 STM32 改动基本正常。
 - 水泵、风扇、继电器：由于测试条件暂不方便而未测，先搁置；不应标记为故障，也不应写成全部实测通过。
@@ -24,7 +34,8 @@
 ## 最近维护入口
 
 - 配置：modules/middleware/src/mw_config.c；滤波：modules/middleware/src/mw_filter.c。
-- 模拟回归：tests/run_control_regressions.py，使用方法见tests/README.md。
+- 传感器模型：modules/middleware/inc/sensor_data.h；采集服务：modules/app/src/app_sensors.c。
+- 模拟回归：tests/run_control_regressions.py和run_sensor_model_regressions.py，使用方法见tests/README.md。
 - 完整修复与硬件待测项目见仓库docs/06。
 
 ## 1. 目录结构

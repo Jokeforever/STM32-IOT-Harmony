@@ -22,7 +22,6 @@
 
 
 extern TIM_HandleTypeDef htim3;
-extern uint16_t light ;
 extern Key Keys[4];
 uint16_t LDR_threhold[2] ;
 

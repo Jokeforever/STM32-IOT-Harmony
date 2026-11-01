@@ -1,3 +1,4 @@
+#include "app_sensors.h"
 /*
  * MODULE OVERVIEW
  * 文件：bump.c
@@ -14,7 +15,6 @@
   #include "bump.h"
   #include "mw_config.h"
 
-extern uint16_t moist ;
 extern float water_vol ;
 
 volatile uint32_t watertime ;
@@ -66,10 +66,11 @@ uint32_t HP_ON_MS = 500;                 // 高压开 0.5s
 uint32_t HP_OFF_MS = 1500;              // 高压关 1.5s
 
 void Irrigation_Control(void) 
-	{	
+	{
+    const SensorData *sensors = SensorService_GetData();
 		if(hp_running || waterflag)
 			return;
-		water_vol = Calculate_Water_Volume(moist);
+		water_vol = Calculate_Water_Volume(sensors->soil_moisture_pct);
 		
 		 if (water_vol > 0.0f && water_vol < MIN_WATER_VOLUME) 
 		{
@@ -93,12 +94,13 @@ void Irrigation_Control(void)
 
 void Start_HighPressure_Irrigation(void)
 {
+    const SensorData *sensors = SensorService_GetData();
 		
 		if (hp_running || waterflag) 
 		{
         return;
     }
-	 water_vol = Calculate_Water_Volume(moist);
+	 water_vol = Calculate_Water_Volume(sensors->soil_moisture_pct);
     	 if (water_vol > 0.0f && water_vol < MIN_WATER_VOLUME) 
 		{
         water_vol = MIN_WATER_VOLUME;
