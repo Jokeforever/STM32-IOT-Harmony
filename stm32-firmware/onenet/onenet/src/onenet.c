@@ -1,3 +1,4 @@
+#include "app_config.h"
 #include "app_sensors.h"
 /*
  * MODULE OVERVIEW
@@ -482,12 +483,6 @@ _Bool OneNet_DevLink(void)
 }
 
 extern float water_vol;
-extern System_Mode current_mode ;
-extern Bump_Mode CurrentBump_mode;
-extern uint16_t CO2_Threhold ;
-//extern uint16_t LDR_threhold[2] ;
-extern uint16_t Bump_threhold[2] ;
-extern uint8_t temp_threhold ;
 
 static int OneNet_Append(char *buf, int size, int offset, const char *fmt, ...)
 {
@@ -541,17 +536,17 @@ unsigned short OneNet_FillBuf(char *buf)
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
 		"\"water_vol\":{\"value\":%.1f},", water_vol);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"led\":{\"value\":%d},", (int)current_mode);
+		"\"led\":{\"value\":%d},", (int)AppConfig_Get()->led_mode);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"bump\":{\"value\":%d},", (int)CurrentBump_mode);
+		"\"bump\":{\"value\":%d},", (int)AppConfig_Get()->bump_mode);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"CO2threhold\":{\"value\":%d},", CO2_Threhold);
+		"\"CO2threhold\":{\"value\":%d},", AppConfig_Get()->co2_threshold);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"droughtthrehold\":{\"value\":%d},", Bump_threhold[0]);
+		"\"droughtthrehold\":{\"value\":%d},", AppConfig_Get()->soil_low);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"moistthrehold\":{\"value\":%d},", Bump_threhold[1]);
+		"\"moistthrehold\":{\"value\":%d},", AppConfig_Get()->soil_high);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
-		"\"tempthrehold\":{\"value\":%d},", temp_threhold);
+		"\"tempthrehold\":{\"value\":%d},", AppConfig_Get()->temp_threshold);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
 		"\"sensor_status\":{\"value\":%d},", (int)sensors->valid_mask);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
@@ -799,54 +794,25 @@ void OneNet_RevPro(unsigned char *cmd)
 								moist_json = cJSON_GetObjectItem(params_json, "moistthrehold");
 								temp_th_json = cJSON_GetObjectItem(params_json, "tempthrehold");
 
-								if(co2_th_json != NULL && co2_th_json->type == cJSON_Number)
-								{
-									int value = co2_th_json->valueint;
-									if(value >= 350 && value <= 4000)
-									{
-										CO2_Threhold = (uint16_t)value;
-										Config_MarkDirty();
-									}
-								}
+                                if (co2_th_json != NULL && co2_th_json->type == cJSON_Number)
+                                {
+                                    (void)AppConfig_Set(APP_CFG_CO2_THRESHOLD, co2_th_json->valueint);
+                                }
 
-								if(drought_json != NULL && drought_json->type == cJSON_Number)
-								{
-									int value = drought_json->valueint;
-									if(value >= 0 && value <= 100)
-									{
-										if(value > (int)Bump_threhold[1])
-										{
-											value = (int)Bump_threhold[1];
-										}
-										Bump_threhold[0] = (uint16_t)value;
-										Config_MarkDirty();
-									}
-								}
+                                if (drought_json != NULL && drought_json->type == cJSON_Number)
+                                {
+                                    (void)AppConfig_Set(APP_CFG_SOIL_LOW, drought_json->valueint);
+                                }
 
-								if(moist_json != NULL && moist_json->type == cJSON_Number)
-								{
-									int value = moist_json->valueint;
-									if(value >= 0 && value <= 100)
-									{
-										if(value < (int)Bump_threhold[0])
-										{
-											value = (int)Bump_threhold[0];
-										}
-										Bump_threhold[1] = (uint16_t)value;
-										Config_MarkDirty();
-									}
-								}
+                                if (moist_json != NULL && moist_json->type == cJSON_Number)
+                                {
+                                    (void)AppConfig_Set(APP_CFG_SOIL_HIGH, moist_json->valueint);
+                                }
 
-								if(temp_th_json != NULL && temp_th_json->type == cJSON_Number)
-								{
-									int value = temp_th_json->valueint;
-									if(value >= 0 && value <= 100)
-									{
-										temp_threhold = (uint8_t)value;
-										Config_MarkDirty();
-									}
-								}
-
+                                if (temp_th_json != NULL && temp_th_json->type == cJSON_Number)
+                                {
+                                    (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD, temp_th_json->valueint);
+                                }
 								snprintf(reply_topic, sizeof(reply_topic),
 									"$sys/%s/%s/thing/property/set_reply",
 									PROID, DEVICE_NAME);

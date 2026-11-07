@@ -1,3 +1,4 @@
+#include "app_config.h"
 #include "app_sensors.h"
 /*
  * MODULE OVERVIEW
@@ -21,37 +22,29 @@ volatile uint32_t watertime ;
 volatile uint8_t waterflag = 0;
 volatile float time_min  = 0;
 volatile uint32_t time_ms = 0;
-uint16_t Bump_threhold[2] ;
 
-Bump_Mode CurrentBump_mode = Bump_OFF;
-Bump_Mode LastBump_mode = Bump_OFF;
 
 void BUMP_Init(void)
 {
-
-	BUMP_OFF;
-	CurrentBump_mode = Bump_OFF;
-	LastBump_mode = Bump_OFF;
-	Bump_threhold[0] = HUMI_THRESHOLD_LOW;
-	Bump_threhold[1] = HUMI_THRESHOLD_HIGH;
+    BUMP_OFF;
 }
 
 float Calculate_Water_Volume(uint16_t current_humi)
 {
-    if (current_humi >= Bump_threhold[1])
+    if (current_humi >= AppConfig_Get()->soil_high)
 		{
         return 0.0f;  // 土壤湿润，无需灌溉
     } 
-		else if (current_humi < Bump_threhold[0]) 
+		else if (current_humi < AppConfig_Get()->soil_low)
 		{
         // 干旱时按最大差值计算
-        float diff = Bump_threhold[1] - Bump_threhold[0];
+        float diff = AppConfig_Get()->soil_high - AppConfig_Get()->soil_low;
         return AREA * diff * WATER_DEPTH * WATER_DENSITY / 100.0f;  // 转换为升（假设diff单位为%，需调整）
     } 
 		else 
 		{
         // 介于两者之间，线性插值
-        float diff = Bump_threhold[1] - current_humi;
+        float diff = AppConfig_Get()->soil_high - current_humi;
         return AREA * diff * WATER_DEPTH * WATER_DENSITY / 100.0f;
     }
    
@@ -125,7 +118,7 @@ static uint32_t t_last = 0;
 
 void Bump_Control(void)
 {
-	switch(CurrentBump_mode)
+	switch(AppConfig_Get()->bump_mode)
 	{
 		case Bump_OFF:
 						BUMP_OFF;
@@ -159,7 +152,7 @@ void Bump_Control(void)
 
 void Bump_Display(void)
 {
-	switch(CurrentBump_mode)
+	switch(AppConfig_Get()->bump_mode)
 	{
 		case Bump_OFF:
 						OLED_ShowCHinese(54,3,10);// 
@@ -179,19 +172,6 @@ void Bump_Display(void)
 
 void Bump_Set(int mode )
 {
-	LastBump_mode = CurrentBump_mode;
-	if(mode == 0)
-	{
-		CurrentBump_mode = Bump_OFF;
-	}
-	else if(mode == 1)
-	{
-		CurrentBump_mode = Bump_CALIBRATION;
-	}
-	else if(mode == 2)
-	{
-		CurrentBump_mode = Bump_AUTO;
-	}
-	Config_MarkDirty();
+    (void)AppConfig_Set(APP_CFG_BUMP_MODE, mode);
 }
 

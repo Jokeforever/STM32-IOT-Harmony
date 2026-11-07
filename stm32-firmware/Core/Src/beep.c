@@ -1,3 +1,4 @@
+#include "app_config.h"
 #include "app_sensors.h"
 #include "beep.h"
 
@@ -13,11 +14,6 @@ void Beep_Init(void)
 
 extern volatile Abnormal abnormal[3];
 extern volatile DisplayScreen CurrentScreen;
-extern uint16_t CO2_Threhold ;
-extern uint16_t LDR_threhold[2] ;
-extern uint16_t Bump_threhold[2] ;
-extern System_Mode current_mode ;
-extern Bump_Mode CurrentBump_mode;
 
 void IS_Normal(void)
 {
@@ -27,12 +23,12 @@ void IS_Normal(void)
 		switch(i)
 		{
 			case 0:
-				if(sensors->light_lux > LDR_threhold[1])
+				if(sensors->light_lux > AppConfig_Get()->ldr_high)
 				{
 					abnormal[i] = BRIGHT;
 
 				}
-			else if(sensors->light_lux<LDR_threhold[0])
+			else if(sensors->light_lux<AppConfig_Get()->ldr_low)
 			{
 				abnormal[i] = DARK;
 
@@ -41,12 +37,12 @@ void IS_Normal(void)
 			abnormal[i] = NONE;
 				break;
 			case 1:
-			if(sensors->soil_moisture_pct> Bump_threhold[1])
+			if(sensors->soil_moisture_pct> AppConfig_Get()->soil_high)
 			{
 				abnormal[i] = DAMP;
 
 			}
-			else if(sensors->soil_moisture_pct< Bump_threhold[0]   )
+			else if(sensors->soil_moisture_pct< AppConfig_Get()->soil_low   )
 			{
 				abnormal[i] = DROUGHT;
 
@@ -55,7 +51,7 @@ void IS_Normal(void)
 				abnormal[i] = NONE;
 				break;
 			case 2:
-			if(((sensors->valid_mask & SENSOR_VALID_CO2) != 0U) && (sensors->co2_ppm > CO2_Threhold))
+			if(((sensors->valid_mask & SENSOR_VALID_CO2) != 0U) && (sensors->co2_ppm > AppConfig_Get()->co2_threshold))
 			{
 				abnormal[i] = HIGHCO2;
 

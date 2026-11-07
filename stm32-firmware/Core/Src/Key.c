@@ -1,3 +1,4 @@
+#include "app_config.h"
 #include "Key.h"
 #include "mw_config.h"
 
@@ -5,8 +6,6 @@ extern volatile DisplayScreen CurrentScreen;
 //extern   uint8_t Key1,Key2 ;
 
 extern uint32_t watertime;
-extern Bump_Mode CurrentBump_mode ;
-extern Bump_Mode LastBump_mode ;
 extern uint8_t waterflag; 
 extern volatile uint32_t time_ms;
 
@@ -18,19 +17,12 @@ extern volatile uint32_t hp_state_start ;   // 当前状态开始时刻
 extern uint32_t HP_ON_MS ;                 // 高压开 0.5s
 extern uint32_t HP_OFF_MS ;              // 高压关 1.5s
  
-extern System_Mode current_mode ;
-extern System_Mode last_mode ;
 
 
 
-extern uint16_t CO2_Threhold ;
-extern uint8_t temp_threhold ;
-extern uint16_t Bump_threhold[2] ;
-extern uint16_t LDR_threhold[2] ;
 
 extern Key Keys[4];
 uint8_t Monitor_para1 = 0; //0 = LDRH,1 = LDRL,2 = BUMPH,3 = BUMPL  4 = TEMPH,5=TEMPL,6=CO2
-uint8_t LED_Manu_PWM = 50;
 
 void Key_Scan(void)
 {
@@ -81,244 +73,98 @@ void Key_Scan(void)
 	}
 }
 
+/* 页面字段选择与原编号一致，所有增减都走同一个饱和检查入口。 */
+static void Key_AdjustParameter(int direction)
+{
+    if (CurrentScreen == DISPLAY_SCREEN4)
+    {
+        switch (Monitor_para1)
+        {
+            case 0: (void)AppConfig_Adjust(APP_CFG_LIGHT_LOW, direction * LDR_STEP); break;
+            case 1: (void)AppConfig_Adjust(APP_CFG_LIGHT_HIGH, direction * LDR_STEP); break;
+            case 2:
+                (void)AppConfig_Adjust(APP_CFG_TEMP_THRESHOLD, direction * TEMP_STEP);
+                Monitor_para1 = 0; /* 保留原温度项操作后返回首项的行为。 */
+                break;
+            default: Monitor_para1 = 0; break;
+        }
+    }
+    else if (CurrentScreen == DISPLAY_SCREEN5)
+    {
+        switch (Monitor_para1)
+        {
+            case 3: (void)AppConfig_Adjust(APP_CFG_SOIL_LOW, direction * BUMP_STEP); break;
+            case 4: (void)AppConfig_Adjust(APP_CFG_SOIL_HIGH, direction * BUMP_STEP); break;
+            case 5: (void)AppConfig_Adjust(APP_CFG_CO2_THRESHOLD, direction * CO2_STEP); break;
+            default: Monitor_para1 = 3; break;
+        }
+    }
+}
+
 void Key_Func(void)
 {
-	if(Keys[0].ClickFlag)
-	{
-		CurrentScreen = (CurrentScreen + 1)%6;
-		if(CurrentScreen == DISPLAY_SCREEN1)
-		{
-			OLED_Clear();
-			Display1_Init();
-		}
-		else 	if(CurrentScreen == DISPLAY_SCREEN2)
-		{
-			OLED_Clear();
-			Display2_Init();
-		}
-		else if(CurrentScreen == DISPLAY_SCREEN3)
-		{
-			OLED_Clear();
-			Display3_Init();
-		}
-		else if(CurrentScreen == DISPLAY_SCREEN4)
-		{
-			OLED_Clear();
-			Display4_Init();
-		}else if(CurrentScreen == DISPLAY_SCREEN5)
-		{
-			OLED_Clear();
-			Display5_Init();
-		}
-		else
-		{
-			OLED_Clear();
-		}
-		Keys[0].ClickFlag = 0;
-		Keys[0].State = 0;
-	}
-	if(Keys[1].ClickFlag)
-	{
-		 if(CurrentScreen == DISPLAY_SCREEN4)
-		{	
-			if(Monitor_para1>3)
-				Monitor_para1 = 0;
-			Monitor_para1 = (Monitor_para1 + 1)%3;
-				
-		}
-			else if(CurrentScreen == DISPLAY_SCREEN5)
-		{	
-			if(Monitor_para1<3)
-				Monitor_para1 = 3;
-			Monitor_para1 = (Monitor_para1 + 1)%6;	
-		}
-		else
-		{
-			if(current_mode == MODE_CALIBRATION && CurrentScreen == DISPLAY_SCREEN2)
-			{
-				if(LED_Manu_PWM < 100)
-				LED_Manu_PWM += 5;
-				else
-				LED_Manu_PWM = 0;
-			}
-		}
-		if((CurrentScreen == DISPLAY_SCREEN2) && (current_mode == MODE_CALIBRATION))
-		{
-			Config_MarkDirty();
-		}
-		Keys[1].ClickFlag = 0;
-		Keys[1].State = 0;
-	}
-	if(Keys[2].ClickFlag)
-	{
-			 if(CurrentScreen == DISPLAY_SCREEN4)
-		{
-			switch(Monitor_para1)
-			{
-				case 0:
-					if(LDR_threhold[0]<LDR_threhold[1])
-					LDR_threhold[0]+=LDR_STEP;
-					else
-					LDR_threhold[0] = LDR_threhold[1];
-					break;
-				case 1:
-					if(LDR_threhold[1] < 9999)
-					LDR_threhold[1]+=LDR_STEP;
-					else
-					LDR_threhold[1]= 9999;
-					break;
-				case 2:
-					if(temp_threhold<100)
-						temp_threhold += TEMP_STEP;
-					else
-						temp_threhold = 100;
-				default:
-					Monitor_para1 = 0;
-			}
-			
-		}
-		else if(CurrentScreen == DISPLAY_SCREEN5)
-		{
-			switch(Monitor_para1)
-			{
-				case 3:
-					if(Bump_threhold[0]<Bump_threhold[1])
-					Bump_threhold[0]+=BUMP_STEP;
-					else
-					Bump_threhold[0] = Bump_threhold[1];
-					break;
-				case 4:
-					if(Bump_threhold[1] < 100)
-					Bump_threhold[1]+=BUMP_STEP;
-					else
-					Bump_threhold[1]= 100;
-					break;
-				case 5:
-					if(CO2_Threhold < 4000)
-					CO2_Threhold+= CO2_STEP;
-					else
-					CO2_Threhold = 4000;
-					break;
-				default:
-					Monitor_para1 = 3;
-
-			}
-		}
-		else
-		{
-		if(Keys[2].LongClickFlag == 1)
-		{
-			if (current_mode != MODE_CALIBRATION)
-				{
-                last_mode = current_mode;
-                current_mode = MODE_CALIBRATION;
-				} 
-				else 
-				{
-				current_mode = last_mode;
-       }
-        Mode_Switch();
-		}
-		else
-		{
-			last_mode = current_mode;
-			current_mode = (current_mode + 1) % 3; 
-      Mode_Switch();  
-		}
-		}
-		if((CurrentScreen == DISPLAY_SCREEN4) || (CurrentScreen == DISPLAY_SCREEN5))
-		{
-			Config_MarkDirty();
-		}
-		Keys[2].ClickFlag = 0;
-		Keys[2].LongClickFlag = 0;
-		Keys[2].State = 0;
-	}
-	if(Keys[3].ClickFlag)
-	{
-		 if(CurrentScreen == DISPLAY_SCREEN4)
-		{
-			switch(Monitor_para1)
-			{
-				case 0:
-					if(LDR_threhold[0]>0)
-					LDR_threhold[0]-=LDR_STEP;
-					else
-					LDR_threhold[0] = 0;
-					break;
-				case 1:
-					if(LDR_threhold[1] > LDR_threhold[0])
-					LDR_threhold[1]-=LDR_STEP;
-					else
-					LDR_threhold[1]= LDR_threhold[0];
-					break;
-				case 2:
-					if(temp_threhold >= TEMP_STEP)
-						temp_threhold -= TEMP_STEP;
-					else
-						temp_threhold = 0; /* 只调整阈值，不修改实测温度；避免1减2下溢。 */
-				default:
-					Monitor_para1 = 0;
-			}
-			
-		}
-		else if(CurrentScreen == DISPLAY_SCREEN5)
-		{
-			switch(Monitor_para1)
-			{
-				case 3:
-					if(Bump_threhold[0]>0)
-					Bump_threhold[0]-=BUMP_STEP;
-					else
-					Bump_threhold[0] = 0;
-					break;
-				case 4:
-					if(Bump_threhold[1] > Bump_threhold[0])
-					Bump_threhold[1]-=BUMP_STEP;
-					else
-					Bump_threhold[1]= Bump_threhold[0];
-					break;
-				case 5:
-					if(CO2_Threhold >350)
-					CO2_Threhold-= CO2_STEP;
-					else
-					CO2_Threhold = 350;
-					break;
-				default:
-					Monitor_para1 = 3;
-
-			}
-		}
-		else
-		{
-		if(Keys[3].LongClickFlag == 1)
-		{
-			if (CurrentBump_mode != Bump_CALIBRATION)
-				{
-                LastBump_mode =  CurrentBump_mode;
-                CurrentBump_mode = Bump_CALIBRATION;
-				} 
-				else 
-				{
-					CurrentBump_mode = LastBump_mode;
-				}
-		}
-		else
-		{
-				LastBump_mode = CurrentBump_mode;
-				CurrentBump_mode = (CurrentBump_mode + 1) % 3; 
-		}
-	}
-		if((CurrentScreen == DISPLAY_SCREEN4) || (CurrentScreen == DISPLAY_SCREEN5))
-		{
-			Config_MarkDirty();
-		}
-		Keys[3].ClickFlag = 0;
-		Keys[3].LongClickFlag = 0;
-		Keys[3].State = 0;
-	}
-		
-
+    const RuntimeConfig *config = AppConfig_Get();
+    if (Keys[0].ClickFlag)
+    {
+        CurrentScreen = (DisplayScreen)((CurrentScreen + 1) % 6);
+        OLED_Clear();
+        switch (CurrentScreen)
+        {
+            case DISPLAY_SCREEN1: Display1_Init(); break;
+            case DISPLAY_SCREEN2: Display2_Init(); break;
+            case DISPLAY_SCREEN3: Display3_Init(); break;
+            case DISPLAY_SCREEN4: Display4_Init(); break;
+            case DISPLAY_SCREEN5: Display5_Init(); break;
+            default: break;
+        }
+        Keys[0].ClickFlag = 0; Keys[0].State = 0;
+    }
+    if (Keys[1].ClickFlag)
+    {
+        if (CurrentScreen == DISPLAY_SCREEN4)
+        {
+            if (Monitor_para1 > 3) Monitor_para1 = 0;
+            Monitor_para1 = (Monitor_para1 + 1) % 3;
+        }
+        else if (CurrentScreen == DISPLAY_SCREEN5)
+        {
+            if (Monitor_para1 < 3) Monitor_para1 = 3;
+            Monitor_para1 = (Monitor_para1 + 1) % 6;
+        }
+        else if (config->led_mode == MODE_CALIBRATION && CurrentScreen == DISPLAY_SCREEN2)
+        {
+            if (config->led_manual_pwm < 100) (void)AppConfig_Adjust(APP_CFG_MANUAL_PWM, 5);
+            else (void)AppConfig_Set(APP_CFG_MANUAL_PWM, 0); /* 保留100后回0的手动调光操作。 */
+        }
+        Keys[1].ClickFlag = 0; Keys[1].State = 0;
+    }
+    if (Keys[2].ClickFlag)
+    {
+        if (CurrentScreen == DISPLAY_SCREEN4 || CurrentScreen == DISPLAY_SCREEN5)
+            Key_AdjustParameter(1);
+        else
+        {
+            int mode = Keys[2].LongClickFlag ?
+                (config->led_mode != MODE_CALIBRATION ? MODE_CALIBRATION : AppConfig_PreviousLedMode()) :
+                (config->led_mode + 1) % 3;
+            LED_Set(mode);
+            Mode_Switch();
+        }
+        Keys[2].ClickFlag = 0; Keys[2].LongClickFlag = 0; Keys[2].State = 0;
+    }
+    if (Keys[3].ClickFlag)
+    {
+        if (CurrentScreen == DISPLAY_SCREEN4 || CurrentScreen == DISPLAY_SCREEN5)
+            Key_AdjustParameter(-1);
+        else
+        {
+            int mode = Keys[3].LongClickFlag ?
+                (config->bump_mode != Bump_CALIBRATION ? Bump_CALIBRATION : AppConfig_PreviousBumpMode()) :
+                (config->bump_mode + 1) % 3;
+            Bump_Set(mode);
+        }
+        Keys[3].ClickFlag = 0; Keys[3].LongClickFlag = 0; Keys[3].State = 0;
+    }
 }
 
 
@@ -327,7 +173,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	if(htim->Instance == TIM1)
 	{
 				Key_Scan();
-				if(waterflag && CurrentBump_mode == Bump_AUTO)
+				if(waterflag && AppConfig_Get()->bump_mode == Bump_AUTO)
 			{
 				watertime++;
 				if(watertime*10>time_ms)  // 灌溉指定时间
@@ -339,7 +185,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 				}
 			}
 			
-			else	if (hp_running && CurrentBump_mode == Bump_CALIBRATION) {
+			else	if (hp_running && AppConfig_Get()->bump_mode == Bump_CALIBRATION) {
             hp_ms_count++; // 总时间累计
             
             uint32_t dur = HAL_GetTick() - hp_state_start;
@@ -370,7 +216,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
                 hp_ms_total = 0;
                 hp_is_on = 0;
 								BUMP_OFF;
-								CurrentBump_mode = Bump_OFF;
+								AppConfig_CompletePumpFromISR();
             }
 			
 					}

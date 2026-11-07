@@ -1,3 +1,4 @@
+#include "app_config.h"
 /*
  * MODULE OVERVIEW
  * 文件：LED.c
@@ -23,44 +24,24 @@
 
 extern TIM_HandleTypeDef htim3;
 extern Key Keys[4];
-uint16_t LDR_threhold[2] ;
 
  LED_Control led_ctrl = {0};
-System_Mode current_mode = MODE_AUTO_PID;
-System_Mode last_mode = MODE_AUTO_PID;
-extern uint8_t LED_Manu_PWM;
  uint16_t ccr = 0;
 
 
 void LED_Set( int mode)
 {
-	last_mode = current_mode;
-	if(mode == LED_ON)
-	current_mode = MODE_CALIBRATION;
-	else if(mode == LED_AUTO)
-	current_mode = MODE_AUTO_PID ;
-	else if(mode == LED_OFF)
-	current_mode = MODE_OFF;
-	
-	LED_PID_Reset();
-	Config_MarkDirty();
+    (void)AppConfig_Set(APP_CFG_LED_MODE, mode);
 }
 
 
 void LED_Init(void)
 {
     led_ctrl.enabled = 1;
-    led_ctrl.target_lux = LED_DEFAULT_TARGET_LUX;
-    led_ctrl.k_p = 1.5f;
-    led_ctrl.k_i = 0.0f;
-    led_ctrl.k_d = 0.0f;
-    led_ctrl.dead_zone = 20;
     led_ctrl.pwm_value = 300;
 
     LED_PID_Reset();
 
-    LDR_threhold[0] = LDR_THREHOLD_LOW;
-    LDR_threhold[1] = LDR_THREHOLD_HIGH;
     LED_SetPWM(led_ctrl.pwm_value);
 }
 
@@ -91,9 +72,9 @@ void LED_Update(int16_t current_lux)
     }
 
     led_ctrl.current_lux = current_lux;
-    error = (float)led_ctrl.target_lux - (float)current_lux;
+    error = (float)AppConfig_Get()->pid_target_lux - (float)current_lux;
 
-    if (fabsf(error) <= (float)led_ctrl.dead_zone)
+    if (fabsf(error) <= (float)AppConfig_Get()->pid_dead_zone)
     {
         led_ctrl.integral = 0.0f;
         led_ctrl.last_error = error;
@@ -127,9 +108,9 @@ void LED_Update(int16_t current_lux)
 
     led_ctrl.integral += error * dt;
 
-    if (led_ctrl.k_i > 0.0f)
+    if (((float)AppConfig_Get()->pid_ki_x1000 / 1000.0f) > 0.0f)
     {
-        integral_limit = (float)PWM_MAX / led_ctrl.k_i;
+        integral_limit = (float)PWM_MAX / ((float)AppConfig_Get()->pid_ki_x1000 / 1000.0f);
         if (led_ctrl.integral > integral_limit)
         {
             led_ctrl.integral = integral_limit;
@@ -144,9 +125,9 @@ void LED_Update(int16_t current_lux)
         led_ctrl.integral = 0.0f;
     }
 
-    p_term = led_ctrl.k_p * error;
-    i_term = led_ctrl.k_i * led_ctrl.integral;
-    d_term = led_ctrl.k_d * (error - led_ctrl.last_error) / dt;
+    p_term = ((float)AppConfig_Get()->pid_kp_x1000 / 1000.0f) * error;
+    i_term = ((float)AppConfig_Get()->pid_ki_x1000 / 1000.0f) * led_ctrl.integral;
+    d_term = ((float)AppConfig_Get()->pid_kd_x1000 / 1000.0f) * (error - led_ctrl.last_error) / dt;
     output = p_term + i_term + d_term;
 
     if (output > (float)PWM_MAX)
@@ -177,7 +158,7 @@ void Mode_Switch(void)
 {
 	LED_PID_Reset();
 	
-    switch (current_mode) {
+    switch (AppConfig_Get()->led_mode) {
         case MODE_OFF:
             // 关闭LED
             HAL_TIM_PWM_Stop(&PWM_TIMER, PWM_CHANNEL);
@@ -200,13 +181,13 @@ void Mode_Switch(void)
 void LED_Func(void)
 {
 
-        switch (current_mode) {    
+        switch (AppConfig_Get()->led_mode) {
 						case MODE_OFF:
 
 						break;
 												
             case MODE_CALIBRATION:
-							ccr = 10 * LED_Manu_PWM;
+							ccr = 10 * AppConfig_Get()->led_manual_pwm;
             __HAL_TIM_SET_COMPARE(&PWM_TIMER, PWM_CHANNEL, ccr);
              break;
 						
@@ -218,7 +199,7 @@ void LED_Func(void)
 
 void LED_Display(void)
 {
-	 switch (current_mode) 
+	 switch (AppConfig_Get()->led_mode)
 				{    
 						case MODE_OFF:
 						OLED_ShowCHinese(64,3,10);// 

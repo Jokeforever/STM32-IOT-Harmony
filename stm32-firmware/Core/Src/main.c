@@ -1,3 +1,4 @@
+#include "app_config.h"
 /*
  * MODULE OVERVIEW
  * 文件：main.c
@@ -93,15 +94,6 @@
 
 /* USER CODE BEGIN PV */
 Key Keys[4];
-extern System_Mode current_mode ;
-extern System_Mode last_mode ;
-extern Bump_Mode CurrentBump_mode;
-extern Bump_Mode LastBump_mode ;
-extern uint8_t temp_threhold;
-extern uint16_t Bump_threhold[2];
-extern uint16_t LDR_threhold[2];
-extern uint16_t CO2_Threhold;
-extern uint8_t LED_Manu_PWM;
 uint8_t rx_buffer[1];
 float water_vol = 0.0f;
 extern uint8_t esp8266_buf[512];
@@ -172,6 +164,7 @@ int main(void)
 	unsigned char *dataPtr = NULL;
 	uint8_t net_retry = 0;
 	uint8_t login_retry = 0;
+	AppConfig_Init();
 	SensorService_Init();
 	Hardware_Init();
 	HAL_UART_Receive_IT(&huart1, rx_buffer, 1);
@@ -220,7 +213,7 @@ int main(void)
 		
 		Key_Func();
 
-		if ((current_mode == MODE_AUTO_PID) &&
+		if ((AppConfig_Get()->led_mode == MODE_AUTO_PID) &&
 		    ((HAL_GetTick() - last_led_control_tick) >= LED_CONTROL_INTERVAL_MS))
 		{
 			last_led_control_tick = HAL_GetTick();

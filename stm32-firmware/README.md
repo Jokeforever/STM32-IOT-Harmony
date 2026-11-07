@@ -11,7 +11,17 @@
 5. 真实 WiFi、OneNET 设备密钥和 App 用户密钥不得进入仓库。
 6. 源码保持 UTF-8；未明确要求时不生成 HAP，不自动烧录、不清空 EEPROM。
 
-## 最新验证状态（2026-11-01）
+## 最新验证状态（2026-11-07）
+
+- RuntimeConfig和统一修改入口已完成，用户确认本轮五项检查全部通过。
+- 验收包含旧参数保留、App阈值修改、本机按键与边界、LED模式及掉电保存、持续运行。
+- 11月1日真实Keil完整编译0错误、5个既有cJSON警告；配置/控制284项、采集9030项主机断言通过。
+- 原Key.c的3个枚举混用警告消除；Code=48446、RO=6530、RW=204、ZI=7948。
+- 11月7日确认后同步仓库脱敏副本；App源码、OneNET属性和EEPROM v2/48字节布局不变。
+- 泵/风扇/继电器实体负载实测继续暂缓，本轮确认不扩大为这三类负载已通过。
+- 用户已授权本轮提交并上传Git；上一轮传感器模型已上传，提交040afe2。
+
+## 上一阶段验证记录（2026-11-01，传感器模型）
 
 - 统一传感器数据模型与采集服务已完成，用户确认文档中的五项验收测试全部通过。
 - 五项包括数据链路、光照/LED、DHT11失效恢复、App控制与掉电保存、本机温度阈值下边界。
@@ -19,7 +29,7 @@
 - 真实Keil工程完整编译0错误、8个既有警告；Code=48198、RO=6498、RW=188、ZI=7964。
 - 已按先真实工程、后用户确认的流程同步仓库脱敏副本，保留真实配置与仓库占位符。
 - 水泵、风扇、继电器实体测试继续暂缓；本轮五项通过不代表这三项已完成负载验证。
-- App源码未修改，协议与EEPROM格式不变；用户已授权本地提交；尚未推送Git。
+- App源码未修改，协议与EEPROM格式不变；传感器模型040afe2随后已上传Git。
 
 ## 上一阶段验证记录（2026-10-31）
 
@@ -33,7 +43,7 @@
 
 ## 最近维护入口
 
-- 配置：modules/middleware/src/mw_config.c；滤波：modules/middleware/src/mw_filter.c。
+- 运行配置：modules/app/src/app_config.c；存储映射：modules/middleware/src/mw_config.c；滤波：mw_filter.c。
 - 传感器模型：modules/middleware/inc/sensor_data.h；采集服务：modules/app/src/app_sensors.c。
 - 模拟回归：tests/run_control_regressions.py和run_sensor_model_regressions.py，使用方法见tests/README.md。
 - 完整修复与硬件待测项目见仓库docs/06。
@@ -180,3 +190,5 @@ ESP8266 要求：
 - 如果使用了不同的 WiFi，请只使用 2.4GHz
 - 如果设备密钥泄露，请在 OneNET 控制台重新生成
 - 当前自动重连主要针对 TCP/MQTT；ESP8266 通常会自动重连上次保存的 AP
+
+- 运行配置与2026-11-07验收记录：docs/2026-11-01-Runtime-Config.md（仓库总入口docs/09）。

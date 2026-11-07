@@ -524,6 +524,11 @@
               <FileType>1</FileType>
               <FilePath>..\modules\app\src\app_sensors.c</FilePath>
             </File>
+            <File>
+              <FileName>app_config.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\modules\app\src\app_config.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

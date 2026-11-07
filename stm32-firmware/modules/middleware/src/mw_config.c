@@ -6,20 +6,17 @@
  *
  * 抽离说明：
  *   本文件原为 main.c 第 441-821 行的配置管理代码，共 12 个函数。
- *   逻辑与原来完全一致，未做任何行为改动。
+ *   2026-11-01：运行参数通过AppConfig映射，保留v1/v2存储布局及槽/CRC流程。
  *
  * 依赖：
  *   - EEPROM24C02_Read / EEPROM24C02_Write   （drivers 层）
- *   - 各模块的全局参数变量                    （app 层）
+ *   - AppConfig运行参数服务                    （app 层）
  *   - HAL_GetTick()                          （bsp 层）
  */
 
 #include "mw_config.h"
 #include "i2c.h"          /* EEPROM24C02_Read / Write */
-#include "LED.h"          /* System_Mode, led_ctrl, LDR_threhold, LED_PID_Reset */
-#include "bump.h"         /* Bump_Mode, Bump_threhold, HUMI_THRESHOLD_* */
-#include "jdq.h"          /* TEMP_THREHOLD */
-#include "usart3.h"       /* CO2_THREHOLD */
+#include "app_config.h"
 
 #include <string.h>
 #include <stddef.h>
@@ -47,6 +44,11 @@ typedef struct
     uint32_t crc32;
 } DeviceConfigV1;
 
+/* 在目标编译器上锁定旧EEPROM布局，避免结构体调整破坏已有配置。 */
+typedef char ConfigV2SizeCheck[(sizeof(DeviceConfig) == 48U) ? 1 : -1];
+typedef char ConfigV2CRCCheck[(offsetof(DeviceConfig, crc32) == 44U) ? 1 : -1];
+typedef char ConfigV1SizeCheck[(sizeof(DeviceConfigV1) == 32U) ? 1 : -1];
+
 /* 双槽读取缓冲，两个结构体共用同一块 64 字节空间 */
 typedef union
 {
@@ -63,19 +65,6 @@ static uint16_t     g_config_sequence = 0U;
 static uint8_t      g_config_active_slot = 0U;
 static volatile uint8_t  g_config_dirty = 0U;
 static uint32_t     g_config_dirty_tick = 0U;
-
-/* ============================================================
- * 外部参数变量（由各模块定义）
- * ============================================================ */
-extern System_Mode current_mode;
-extern System_Mode last_mode;
-extern Bump_Mode   CurrentBump_mode;
-extern Bump_Mode   LastBump_mode;
-extern uint8_t     temp_threhold;
-extern uint16_t    Bump_threhold[2];
-extern uint16_t    LDR_threhold[2];
-extern uint16_t    CO2_Threhold;
-extern uint8_t     LED_Manu_PWM;
 
 /* ============================================================
  * CRC32（标准多项式 0xEDB88320）
@@ -157,6 +146,8 @@ static uint8_t Config_IsValidV1(const DeviceConfigV1 *config)
  * ============================================================ */
 static void Config_UpgradeV1(DeviceConfig *out, const DeviceConfigV1 *in)
 {
+    RuntimeConfig defaults;
+    AppConfig_GetDefaults(&defaults);
     memset(out, 0, sizeof(*out));
     out->magic = CONFIG_MAGIC;
     out->version = CONFIG_VERSION;
@@ -173,11 +164,11 @@ static void Config_UpgradeV1(DeviceConfig *out, const DeviceConfigV1 *in)
     out->soil_high = in->soil_high;
     out->soil_wet_adc = in->soil_wet_adc;
     out->soil_dry_adc = in->soil_dry_adc;
-    out->pid_target_lux = LED_DEFAULT_TARGET_LUX;
-    out->pid_dead_zone = 20U;
-    out->pid_kp_x1000 = 1500;
-    out->pid_ki_x1000 = 0;
-    out->pid_kd_x1000 = 0;
+    out->pid_target_lux = defaults.pid_target_lux;
+    out->pid_dead_zone = defaults.pid_dead_zone;
+    out->pid_kp_x1000 = defaults.pid_kp_x1000;
+    out->pid_ki_x1000 = defaults.pid_ki_x1000;
+    out->pid_kd_x1000 = defaults.pid_kd_x1000;
 }
 
 /* ============================================================
@@ -214,29 +205,31 @@ static uint8_t Config_ReadSlot(uint8_t slot_addr, DeviceConfig *out, uint8_t *is
  * ============================================================ */
 static void Config_SetDefault(void)
 {
+    RuntimeConfig defaults;
+    AppConfig_GetDefaults(&defaults);
     memset(&g_device_config, 0, sizeof(g_device_config));
     g_device_config.magic = CONFIG_MAGIC;
     g_device_config.version = CONFIG_VERSION;
     g_device_config.size = (uint16_t)sizeof(DeviceConfig);
     g_device_config.sequence = 0U;
-    g_device_config.led_mode = (uint8_t)MODE_AUTO_PID;
-    g_device_config.bump_mode = (uint8_t)Bump_OFF;
-    g_device_config.led_manual_pwm = 50U;
-    g_device_config.temp_threshold = (uint8_t)TEMP_THREHOLD;
-    g_device_config.co2_threshold = CO2_THREHOLD;
-    g_device_config.ldr_low = LDR_THREHOLD_LOW;
-    g_device_config.ldr_high = LDR_THREHOLD_HIGH;
-    g_device_config.soil_low = HUMI_THRESHOLD_LOW;
-    g_device_config.soil_high = HUMI_THRESHOLD_HIGH;
+    g_device_config.led_mode = defaults.led_mode;
+    g_device_config.bump_mode = defaults.bump_mode;
+    g_device_config.led_manual_pwm = defaults.led_manual_pwm;
+    g_device_config.temp_threshold = defaults.temp_threshold;
+    g_device_config.co2_threshold = defaults.co2_threshold;
+    g_device_config.ldr_low = defaults.ldr_low;
+    g_device_config.ldr_high = defaults.ldr_high;
+    g_device_config.soil_low = defaults.soil_low;
+    g_device_config.soil_high = defaults.soil_high;
+    g_device_config.pid_target_lux = defaults.pid_target_lux;
+    g_device_config.pid_dead_zone = defaults.pid_dead_zone;
+    g_device_config.pid_kp_x1000 = defaults.pid_kp_x1000;
+    g_device_config.pid_ki_x1000 = defaults.pid_ki_x1000;
+    g_device_config.pid_kd_x1000 = defaults.pid_kd_x1000;
     g_device_config.soil_wet_adc = 1241U;
     g_device_config.soil_dry_adc = 4095U;
-    g_device_config.pid_target_lux = LED_DEFAULT_TARGET_LUX;
-    g_device_config.pid_dead_zone = 20U;
-    g_device_config.pid_kp_x1000 = 1500;
-    g_device_config.pid_ki_x1000 = 0;
-    g_device_config.pid_kd_x1000 = 0;
     g_device_config.crc32 = Config_CRC32((const uint8_t *)&g_device_config,
-                                         (uint32_t)(sizeof(DeviceConfig) - sizeof(uint32_t)));
+                                        (uint32_t)(sizeof(DeviceConfig) - sizeof(uint32_t)));
 }
 
 /* ============================================================
@@ -244,13 +237,15 @@ static void Config_SetDefault(void)
  * ============================================================ */
 static void Config_Sanitize(DeviceConfig *config)
 {
-    if (config->led_mode > (uint8_t)MODE_AUTO_PID)
+    RuntimeConfig defaults;
+    AppConfig_GetDefaults(&defaults);
+    if (config->led_mode > 2U)
     {
-        config->led_mode = (uint8_t)MODE_AUTO_PID;
+        config->led_mode = 2U;
     }
-    if (config->bump_mode > (uint8_t)Bump_AUTO)
+    if (config->bump_mode > 2U)
     {
-        config->bump_mode = (uint8_t)Bump_OFF;
+        config->bump_mode = 0U;
     }
     if (config->led_manual_pwm > 100U)
     {
@@ -262,17 +257,17 @@ static void Config_Sanitize(DeviceConfig *config)
     }
     if ((config->co2_threshold < 350U) || (config->co2_threshold > 4000U))
     {
-        config->co2_threshold = CO2_THREHOLD;
+        config->co2_threshold = defaults.co2_threshold;
     }
     if ((config->ldr_low > config->ldr_high) || (config->ldr_high > 9999U))
     {
-        config->ldr_low = LDR_THREHOLD_LOW;
-        config->ldr_high = LDR_THREHOLD_HIGH;
+        config->ldr_low = defaults.ldr_low;
+        config->ldr_high = defaults.ldr_high;
     }
     if ((config->soil_low > config->soil_high) || (config->soil_high > 100U))
     {
-        config->soil_low = HUMI_THRESHOLD_LOW;
-        config->soil_high = HUMI_THRESHOLD_HIGH;
+        config->soil_low = defaults.soil_low;
+        config->soil_high = defaults.soil_high;
     }
     if ((config->soil_wet_adc < 1U) || (config->soil_wet_adc >= config->soil_dry_adc))
     {
@@ -281,83 +276,79 @@ static void Config_Sanitize(DeviceConfig *config)
     }
     if ((config->pid_target_lux < 0) || (config->pid_target_lux > 999))
     {
-        config->pid_target_lux = LED_DEFAULT_TARGET_LUX;
+        config->pid_target_lux = defaults.pid_target_lux;
     }
     if (config->pid_dead_zone > 200U)
     {
-        config->pid_dead_zone = 20U;
+        config->pid_dead_zone = defaults.pid_dead_zone;
     }
     if ((config->pid_kp_x1000 < 0) || (config->pid_kp_x1000 > 10000))
     {
-        config->pid_kp_x1000 = 1500;
+        config->pid_kp_x1000 = defaults.pid_kp_x1000;
     }
     if ((config->pid_ki_x1000 < 0) || (config->pid_ki_x1000 > 10000))
     {
-        config->pid_ki_x1000 = 0;
+        config->pid_ki_x1000 = defaults.pid_ki_x1000;
     }
     if ((config->pid_kd_x1000 < 0) || (config->pid_kd_x1000 > 10000))
     {
-        config->pid_kd_x1000 = 0;
+        config->pid_kd_x1000 = defaults.pid_kd_x1000;
     }
 }
 
 /* ============================================================
- * 把配置应用到各模块的全局参数
+ * 把存储记录转换为运行配置
  * ============================================================ */
 static void Config_Apply(void)
 {
-    current_mode = (System_Mode)g_device_config.led_mode;
-    last_mode = current_mode;
-    CurrentBump_mode = (Bump_Mode)g_device_config.bump_mode;
-    LastBump_mode = CurrentBump_mode;
-    LED_Manu_PWM = g_device_config.led_manual_pwm;
-    temp_threhold = g_device_config.temp_threshold;
-    CO2_Threhold = g_device_config.co2_threshold;
-    LDR_threhold[0] = g_device_config.ldr_low;
-    LDR_threhold[1] = g_device_config.ldr_high;
-    Bump_threhold[0] = g_device_config.soil_low;
-    Bump_threhold[1] = g_device_config.soil_high;
-
-    led_ctrl.target_lux = g_device_config.pid_target_lux;
-    led_ctrl.dead_zone = g_device_config.pid_dead_zone;
-    led_ctrl.k_p = (float)g_device_config.pid_kp_x1000 / 1000.0f;
-    led_ctrl.k_i = (float)g_device_config.pid_ki_x1000 / 1000.0f;
-    led_ctrl.k_d = (float)g_device_config.pid_kd_x1000 / 1000.0f;
-    LED_PID_Reset();
+    RuntimeConfig runtime;
+    runtime.led_mode = g_device_config.led_mode;
+    runtime.bump_mode = g_device_config.bump_mode;
+    runtime.led_manual_pwm = g_device_config.led_manual_pwm;
+    runtime.temp_threshold = g_device_config.temp_threshold;
+    runtime.co2_threshold = g_device_config.co2_threshold;
+    runtime.ldr_low = g_device_config.ldr_low;
+    runtime.ldr_high = g_device_config.ldr_high;
+    runtime.soil_low = g_device_config.soil_low;
+    runtime.soil_high = g_device_config.soil_high;
+    runtime.pid_target_lux = g_device_config.pid_target_lux;
+    runtime.pid_dead_zone = g_device_config.pid_dead_zone;
+    runtime.pid_kp_x1000 = g_device_config.pid_kp_x1000;
+    runtime.pid_ki_x1000 = g_device_config.pid_ki_x1000;
+    runtime.pid_kd_x1000 = g_device_config.pid_kd_x1000;
+    (void)AppConfig_Restore(&runtime); /* Config_Sanitize已验证存储参数。 */
 }
 
 /* ============================================================
- * 从当前全局参数构造配置结构
+ * 从只读运行配置构造存储记录
  * ============================================================ */
 static void Config_FromCurrent(DeviceConfig *config)
 {
+    const RuntimeConfig *runtime = AppConfig_Get();
     memset(config, 0, sizeof(*config));
     config->magic = CONFIG_MAGIC;
     config->version = CONFIG_VERSION;
     config->size = (uint16_t)sizeof(DeviceConfig);
     config->sequence = g_config_sequence + 1U;
-    if (config->sequence == 0U)
-    {
-        config->sequence = 1U;
-    }
-    config->led_mode = (uint8_t)current_mode;
-    config->bump_mode = (uint8_t)CurrentBump_mode;
-    config->led_manual_pwm = LED_Manu_PWM;
-    config->temp_threshold = temp_threhold;
-    config->co2_threshold = CO2_Threhold;
-    config->ldr_low = LDR_threhold[0];
-    config->ldr_high = LDR_threhold[1];
-    config->soil_low = Bump_threhold[0];
-    config->soil_high = Bump_threhold[1];
+    if (config->sequence == 0U) config->sequence = 1U;
+    config->led_mode = runtime->led_mode;
+    config->bump_mode = runtime->bump_mode;
+    config->led_manual_pwm = runtime->led_manual_pwm;
+    config->temp_threshold = runtime->temp_threshold;
+    config->co2_threshold = runtime->co2_threshold;
+    config->ldr_low = runtime->ldr_low;
+    config->ldr_high = runtime->ldr_high;
+    config->soil_low = runtime->soil_low;
+    config->soil_high = runtime->soil_high;
+    config->pid_target_lux = runtime->pid_target_lux;
+    config->pid_dead_zone = runtime->pid_dead_zone;
+    config->pid_kp_x1000 = runtime->pid_kp_x1000;
+    config->pid_ki_x1000 = runtime->pid_ki_x1000;
+    config->pid_kd_x1000 = runtime->pid_kd_x1000;
     config->soil_wet_adc = 1241U;
     config->soil_dry_adc = 4095U;
-    config->pid_target_lux = led_ctrl.target_lux;
-    config->pid_dead_zone = led_ctrl.dead_zone;
-    config->pid_kp_x1000 = (int32_t)(led_ctrl.k_p * 1000.0f + 0.5f);
-    config->pid_ki_x1000 = (int32_t)(led_ctrl.k_i * 1000.0f + 0.5f);
-    config->pid_kd_x1000 = (int32_t)(led_ctrl.k_d * 1000.0f + 0.5f);
     config->crc32 = Config_CRC32((const uint8_t *)config,
-                                  (uint32_t)(sizeof(DeviceConfig) - sizeof(uint32_t)));
+                                (uint32_t)(sizeof(DeviceConfig) - sizeof(uint32_t)));
 }
 
 /* ============================================================

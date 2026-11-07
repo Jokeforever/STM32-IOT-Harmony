@@ -2,7 +2,7 @@
  * MODULE OVERVIEW
  * 文件：mw_config.h
  * 作用：设备参数掉电保存模块（从 main.c / main.h 抽离）
- * 层次：middleware 层 —— 与硬件无关，只依赖 EEPROM 读写接口
+ * 层次：middleware 存储层 —— 通过 AppConfig 映射运行配置，保留旧 EEPROM 布局
  *
  * 设计说明：
  *   - 24C02 双槽存储，Slot A = 0x00，Slot B = 0x40
@@ -12,8 +12,8 @@
  *   - 参数变化后延时写入，避免频繁擦写 EEPROM
  *
  * 迁移提示（换 MCU 时）：
- *   本模块只依赖 EEPROM24C02_Read/Write 两个函数。
- *   换平台只需替换驱动实现，本文件无需修改。
+ *   实现依赖 EEPROM24C02_Read/Write、HAL_GetTick 与 AppConfig 服务。
+ *   换平台需要检查存储接口、时基及服务适配；本头文件的存储结构须保持兼容。
  */
 
 #ifndef __MW_CONFIG_H

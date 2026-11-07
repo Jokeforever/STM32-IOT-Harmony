@@ -1,3 +1,4 @@
+#include "app_config.h"
 #include "app_sensors.h"
 #include "Display.h"
 
@@ -5,10 +6,6 @@
 extern float water_vol ;
 extern volatile DisplayScreen CurrentScreen;
 extern volatile Abnormal abnormal[3];
-extern uint16_t CO2_Threhold ;
-extern uint8_t temp_threhold ;
-extern uint16_t Bump_threhold[2] ;
-extern uint16_t LDR_threhold[2] ;
 
 void Display1_Init(void)
 {
@@ -122,13 +119,13 @@ void Refresh4_Data(void)
 {
 	char buf4[10];
 	
-	sprintf(buf4,"%d  ",LDR_threhold[0]);	
+	sprintf(buf4,"%d  ",AppConfig_Get()->ldr_low);
 	OLED_ShowString(48,0,(uint8_t*)buf4,16);  
 	
-	sprintf(buf4,"%d  ",LDR_threhold[1]);	
+	sprintf(buf4,"%d  ",AppConfig_Get()->ldr_high);
 	OLED_ShowString(48,3,(uint8_t*)buf4,16); 
 	
-	sprintf(buf4,"%d  ",temp_threhold);	
+	sprintf(buf4,"%d  ",AppConfig_Get()->temp_threshold);
 	OLED_ShowString(48,6,(uint8_t*)buf4,16);  
 	
 
@@ -138,14 +135,14 @@ void Refresh5_Data(void)
 	
 	char buf5[10];
 	
-		sprintf(buf5,"%d  ",Bump_threhold[0]);	
+		sprintf(buf5,"%d  ",AppConfig_Get()->soil_low);
 	OLED_ShowString(48,0,(uint8_t*)buf5,16);  
 	
-	sprintf(buf5,"%d  ",Bump_threhold[1]);	
+	sprintf(buf5,"%d  ",AppConfig_Get()->soil_high);
 	OLED_ShowString(48,3,(uint8_t*)buf5,16); 
 
 	
-	sprintf(buf5,"%d  ",CO2_Threhold);	
+	sprintf(buf5,"%d  ",AppConfig_Get()->co2_threshold);
 	OLED_ShowString(48,6,(uint8_t*)buf5,16); 
 	
 }

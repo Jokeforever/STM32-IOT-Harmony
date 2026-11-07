@@ -1,5 +1,17 @@
 # STM32 端代码功能讲解（完整版）
 
+## 2026-11-07 当前运行配置（优先于旧版全局变量示例）
+
+运行参数现位于modules/app/inc/app_config.h的RuntimeConfig，读数仍位于SensorData。
+LED/泵模式、阈值、手动PWM、PID目标/死区/系数均通过AppConfig_Get读取。
+AppConfig_Set接受指定值，AppConfig_Adjust执行饱和增减；合法变化通知Config_MarkDirty，PID变化清历史。
+LED_Control不再保存target_lux/k_p/k_i/k_d/dead_zone，只保存PWM、积分、历史误差和时间等运行状态。
+PID参数以乘1000的整数保存，计算时转为实际系数；默认值和已有EEPROM参数的优先级保留。
+mw_config把RuntimeConfig逐字段映射到旧DeviceConfig，v2仍48字节，CRC偏移44，v1仍32字节。
+主循环改泵模式与中断完成分别走受保护的入口，原脉冲计时/补水量估算保留。
+初始化/恢复发生在启动计时中断之前，实际实现仍有HAL时基、PID重置与中断原语依赖，尚未完全独立于平台。
+11月7日用户确认五项验收通过；详细接口、参数表和实测范围见docs/09-Runtime-Configuration.md。
+
 ## 2026-11-01 当前数据流（优先于下文旧版全局变量示例）
 
 主循环按原周期调用SensorService_Poll/ReadLight；采集服务保存SensorData和滤波历史。
@@ -23,7 +35,7 @@ Display、beep、jdq、bump及OneNET通过SensorService_GetData得到只读视�
 - 用户反馈除水泵、风扇、继电器相关部分外，其余STM32改动基本正常；这三部分因测试不便暂缓，不判故障。
 - 实际C函数硬件模拟回归32项通过；Keil完整重编译0错误、8个现有警告，不能把历史增量编译“0警告”当作完整工程零警告。
 - STM32先改 `E:\fuchuang\code\IOT5-smart2-IOT-final`，用户确认效果后再同步仓库脱敏副本；不再默认两份同时修改。
-- 当前仍为F103和ESP8266，新F407/S3底板未启用；传感器数据模型已于11月1日完成并获用户验收，配置与运行状态进一步解耦仍待实施。
+- 当前仍为F103和ESP8266，新F407/S3底板未启用；传感器数据模型已于11月1日完成并获用户验收，运行配置已于11月7日验收，余下运行状态与算法/驱动分离仍待实施。
 - 已抽离的mw_filter是纯算法；mw_config仍依赖HAL、EEPROM和业务全局变量，不能称为完全与硬件无关。
 
 ## 0. 这份文档怎么用

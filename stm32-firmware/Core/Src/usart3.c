@@ -1,3 +1,4 @@
+#include "app_config.h"
 /*
  * MODULE OVERVIEW
  * 文件：usart3.c
@@ -21,7 +22,6 @@ extern UART_HandleTypeDef huart3;
 
 uint8_t Usart3_RxPacket[USART3_RX_PACKET_SIZE];
 volatile uint8_t Usart3_RxFlag = 0;
-uint16_t CO2_Threhold ;
 /* 模块内静态变量 */
 
 
@@ -37,7 +37,6 @@ void USART3_Rx_Start_IT(void)
     RxState = 0;
     pRxPacket = 0;
     Usart3_RxFlag = 0;
-    CO2_Threhold = CO2_THREHOLD;
     // 启动中断接收
     HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
 }

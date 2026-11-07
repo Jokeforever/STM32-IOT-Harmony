@@ -28,20 +28,15 @@ void LED_Set(int mode);
 #define LED_CONTROL_INTERVAL_MS 1000U
 #define LED_PID_MAX_GAP_MS (5U * LED_CONTROL_INTERVAL_MS)
 
-/* 控制结构体 */
+/* LED运行状态；目标/系数/死区由AppConfig统一保存。 */
 typedef struct {
     uint8_t enabled;
-    int16_t target_lux;
     int16_t current_lux;
     uint16_t pwm_value;
-    float k_p;
-    float k_i;
-    float k_d;
     float integral;
     float last_error;
     uint32_t last_tick;
     uint8_t pid_initialized;
-    uint16_t dead_zone;
 } LED_Control;
 
 extern LED_Control led_ctrl;
