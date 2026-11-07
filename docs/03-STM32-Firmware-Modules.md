@@ -1,5 +1,17 @@
 # STM32 端代码功能讲解（完整版）
 
+## 2026-11-07 PID纯算法与LED适配（当前实现）
+
+PID计算位于modules/middleware/src/mw_pid.c，接口为PID_Reset与PID_Update。
+PID_Config包含目标、死区、乘1000的系数、输出上限和时间规则；PID_State保存积分、误差、时间和初始化状态。
+LED_Update读取RuntimeConfig和HAL时间，只有PID_OUTPUT_READY才调用LED_SetPWM，HOLD/INVALID不写硬件。
+旧LED状态字段integral/last_error/last_tick/pid_initialized移至led_ctrl.pid对应成员，initialized替代旧pid_initialized名。
+原公式、正向非负输出、首样本建历史、死区保持和严格大于5秒重建历史均保留。
+自动与手动PWM统一从LED_SetPWM输出，手动pwm_value诊断现在与实际设置一致。
+用户五项实测通过；36925项PID、294项控制、9030项采集回归通过，完整编译0错误5个既有警告。
+这一轮没有改变配置、云端属性和网络，也不等于解决了灯带与光敏的物理耦合或完成PID整定。
+完整学习教程见docs/10-PID-Algorithm-Separation.md。
+
 ## 2026-11-07 当前运行配置（优先于旧版全局变量示例）
 
 运行参数现位于modules/app/inc/app_config.h的RuntimeConfig，读数仍位于SensorData。
@@ -35,7 +47,7 @@ Display、beep、jdq、bump及OneNET通过SensorService_GetData得到只读视�
 - 用户反馈除水泵、风扇、继电器相关部分外，其余STM32改动基本正常；这三部分因测试不便暂缓，不判故障。
 - 实际C函数硬件模拟回归32项通过；Keil完整重编译0错误、8个现有警告，不能把历史增量编译“0警告”当作完整工程零警告。
 - STM32先改 `E:\fuchuang\code\IOT5-smart2-IOT-final`，用户确认效果后再同步仓库脱敏副本；不再默认两份同时修改。
-- 当前仍为F103和ESP8266，新F407/S3底板未启用；传感器数据模型已于11月1日完成并获用户验收，运行配置已于11月7日验收，余下运行状态与算法/驱动分离仍待实施。
+- 当前仍为F103和ESP8266，新F407/S3底板未启用；传感器数据模型已于11月1日完成并获用户验收，运行配置已于11月7日验收，PID算法/LED适配现也已分离验收，其余运行状态与平台接口仍待整理。
 - 已抽离的mw_filter是纯算法；mw_config仍依赖HAL、EEPROM和业务全局变量，不能称为完全与硬件无关。
 
 ## 0. 这份文档怎么用

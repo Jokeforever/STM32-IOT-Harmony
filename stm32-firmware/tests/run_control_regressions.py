@@ -66,6 +66,7 @@ for name in ('main.h', 'fan.h', 'jdq.h', 'beep.h'):
 header('sensor_data.h', read('modules/middleware/inc/sensor_data.h'))
 header('app_sensors.h', read('modules/app/inc/app_sensors.h'))
 header('app_config.h', read('modules/app/inc/app_config.h'))
+header('mw_pid.h', read('modules/middleware/inc/mw_pid.h'))
 header('LED.h', read('Core/Inc/LED.h').replace('#include "Key.h"', '#include "Key.h"\n#include "stm32f1xx_hal.h"'))
 header('Key.h', '#ifndef MOCK_KEY_H\n#define MOCK_KEY_H\n#include "stm32f1xx_hal.h"\ntypedef struct { uint8_t State, Pin_state, ClickFlag, LongClickFlag; uint32_t Presstime, Releasetime; } Key;\n#define LDR_STEP 100\n#define CO2_STEP 100\n#define TEMP_STEP 2\n#define BUMP_STEP 2\nvoid Key_Func(void);\n#include "LED.h"\n#include "bump.h"\n#endif\n')
 header('oled.h', '#ifndef MOCK_OLED_H\n#define MOCK_OLED_H\nvoid OLED_Clear(void);\nvoid Display1_Init(void);\nvoid Display2_Init(void);\nvoid Display3_Init(void);\nvoid Display4_Init(void);\nvoid Display5_Init(void);\nvoid OLED_ShowCHinese(int x, int y, int symbol);\n#endif\n')
@@ -132,6 +133,7 @@ volatile Abnormal abnormal[3];
 volatile DisplayScreen CurrentScreen;
 static uint32_t tick;
 static unsigned pwm;
+static unsigned pwm_writes;
 static int pins[3][16];
 static uint8_t eeprom[256];
 static unsigned fail_write,fail_read,corrupt_write;
@@ -144,7 +146,7 @@ void HAL_GPIO_WritePin(int port, unsigned mask, int value) {
 }
 void HAL_TIM_PWM_Start(TIM_HandleTypeDef *h, int c) { (void)h; (void)c; }
 void HAL_TIM_PWM_Stop(TIM_HandleTypeDef *h, int c) { (void)h; (void)c; }
-void mock_compare(unsigned v) { pwm=v; }
+void mock_compare(unsigned v) { pwm=v; pwm_writes++; }
 int HAL_GPIO_ReadPin(int port,unsigned pin) { (void)port;(void)pin;return 1; }
 void OLED_Clear(void) {}
 void Display1_Init(void) {}
@@ -275,14 +277,14 @@ int main(void) {
     (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,25);Monitor_para1=2;Keys[3].ClickFlag=1;Key_Func();
     CHECK(temp_threhold==23);CHECK(temp==25);
     /* PID 积分必须使用实际 0.5/1/1.5 秒，而不是全部裁成 0.1 秒。 */
-    pid(0,1,0,0,100);tick=1000;LED_Update(100);CHECK(near(led_ctrl.integral,100));CHECK(pwm==100);
-    pid(0,1,0,0,100);tick=500;LED_Update(100);CHECK(near(led_ctrl.integral,50));
-    pid(0,1,0,0,100);tick=1500;LED_Update(100);CHECK(near(led_ctrl.integral,150));
+    pid(0,1,0,0,100);tick=1000;LED_Update(100);CHECK(near(led_ctrl.pid.integral,100));CHECK(pwm==100);
+    pid(0,1,0,0,100);tick=500;LED_Update(100);CHECK(near(led_ctrl.pid.integral,50));
+    pid(0,1,0,0,100);tick=1500;LED_Update(100);CHECK(near(led_ctrl.pid.integral,150));
     pid(0,0,1,0,10);tick=1000;LED_Update(180);CHECK(pwm==10);
-    pid(0,1,0,0xFFFFFF00U,100);tick=744;LED_Update(100);CHECK(near(led_ctrl.integral,100));
-    pid(0,1,0,0,100);LED_Update(100);CHECK(near(led_ctrl.integral,0));
-    pid(0,1,0,0,100);led_ctrl.integral=900;tick=10000;LED_Update(100);
-    CHECK(near(led_ctrl.integral,100));CHECK(pwm==100);
+    pid(0,1,0,0xFFFFFF00U,100);tick=744;LED_Update(100);CHECK(near(led_ctrl.pid.integral,100));
+    pid(0,1,0,0,100);LED_Update(100);CHECK(near(led_ctrl.pid.integral,0));
+    pid(0,1,0,0,100);led_ctrl.pid.integral=900;tick=10000;LED_Update(100);
+    CHECK(near(led_ctrl.pid.integral,100));CHECK(pwm==100);
     pid(1.5f,0,0,0,100);tick=1000;LED_Update(100);CHECK(pwm==150);
     LED_SetPWM(-50);CHECK(pwm==0);LED_SetPWM(1500);CHECK(pwm==1000);
     /* 空白配置/双槽保存和重读：新的默认值200，已有有效500不被强制覆盖。 */
@@ -349,8 +351,8 @@ int main(void) {
     CHECK(CurrentBump_mode==1);CHECK(Config_IsDirty()!=0);CHECK(mock_irq_mask==0);
     mock_irq_mask=1;Bump_Set(0);CHECK(mock_irq_mask==1);mock_irq_mask=0;
     /* Updating PID configuration resets dynamic history; repeated values do not. */
-    led_ctrl.integral=42;CHECK(AppConfig_Set(APP_CFG_PID_KI,1000)==APP_CONFIG_CHANGED);CHECK(near(led_ctrl.integral,0));
-    led_ctrl.integral=42;CHECK(AppConfig_Set(APP_CFG_PID_KI,1000)==APP_CONFIG_UNCHANGED);CHECK(near(led_ctrl.integral,42));
+    led_ctrl.pid.integral=42;CHECK(AppConfig_Set(APP_CFG_PID_KI,1000)==APP_CONFIG_CHANGED);CHECK(near(led_ctrl.pid.integral,0));
+    led_ctrl.pid.integral=42;CHECK(AppConfig_Set(APP_CFG_PID_KI,1000)==APP_CONFIG_UNCHANGED);CHECK(near(led_ctrl.pid.integral,42));
     {RuntimeConfig invalid=*AppConfig_Get();invalid.temp_threshold=101;CHECK(AppConfig_Restore(&invalid)==0);}
 
 
@@ -518,13 +520,25 @@ int main(void) {
     CHECK(AppConfig_Get()->pid_target_lux==200);CHECK(AppConfig_Get()->pid_dead_zone==20);
     CHECK(AppConfig_Get()->pid_kp_x1000==1500);CHECK(AppConfig_Get()->pid_ki_x1000==0);CHECK(AppConfig_Get()->pid_kd_x1000==0);
 
+    /* LED适配只在READY写硬件；手动PWM也同步诊断状态。 */
+    AppConfig_Init();LED_Init();
+    (void)AppConfig_Set(APP_CFG_MANUAL_PWM,65);LED_Set(1);LED_Func();
+    CHECK(pwm==650);CHECK(led_ctrl.pwm_value==650);
+    LED_Set(2);Mode_Switch();
+    {unsigned before=pwm_writes;
+     LED_Update(0);CHECK(pwm_writes==before);CHECK(pwm==650);
+     tick+=1000;LED_Update(0);CHECK(pwm_writes==before+1);CHECK(pwm==300);
+     tick+=1000;before=pwm_writes;LED_Update(200);CHECK(pwm_writes==before);CHECK(pwm==300);
+     led_ctrl.enabled=0;LED_Update(1);CHECK(pwm_writes==before);CHECK(led_ctrl.current_lux==200);
+     led_ctrl.enabled=1;
+    }
     return assertions==EXPECTED_ASSERTIONS?0:32000;
 }
 '''
 expected_assertions=harness.count('CHECK(')-1+47
 harness=harness.replace('EXPECTED_ASSERTIONS',str(expected_assertions))
 (OUT / 'test.c').write_text(harness, encoding='utf-8')
-source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/middleware/src/mw_config.c']
+source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c']
 sources = []
 for rel in source_rel:
     p = OUT / Path(rel).name

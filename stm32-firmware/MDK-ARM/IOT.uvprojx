@@ -544,6 +544,11 @@
               <FileType>1</FileType>
               <FilePath>..\modules\middleware\src\mw_filter.c</FilePath>
             </File>
+            <File>
+              <FileName>mw_pid.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\modules\middleware\src\mw_pid.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

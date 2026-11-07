@@ -4,6 +4,7 @@
 
 #include "Key.h"
 #include "oled.h"
+#include "mw_pid.h"
 
 
 
@@ -33,10 +34,7 @@ typedef struct {
     uint8_t enabled;
     int16_t current_lux;
     uint16_t pwm_value;
-    float integral;
-    float last_error;
-    uint32_t last_tick;
-    uint8_t pid_initialized;
+    PID_State pid; /* 独立算法状态，时间由LED适配层传入。 */
 } LED_Control;
 
 extern LED_Control led_ctrl;
