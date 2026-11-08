@@ -8,6 +8,8 @@ import {
 } from '../model/DeviceModels';
 import { TrendHistory } from '../model/TrendHistory';
 import { OneNetApiService } from '../service/OneNetApiService';
+import { ControlPhase, ControlReceipt, ControlRequest, ControlTracker } from '../model/ControlTracker';
+import { ControlFeedback } from '../components/ControlFeedback';
 
 import { AppTheme } from '../theme/AppTheme';
 import { HistoryChart } from '../components/HistoryChart';
@@ -36,6 +38,7 @@ struct DetailModeButton {
   @Prop label: string = '';
   @Prop mode: number = 0;
   @Prop selected: boolean = false;
+  @Prop pending: boolean = false;
   @Prop buttonEnabled: boolean = true;
   onModeClick?: (mode: number) => void;
 
@@ -47,6 +50,7 @@ struct DetailModeButton {
     }
     .height(44).layoutWeight(1).padding({ left: 6, right: 6 })
     .borderRadius(13)
+    .border({ width: this.pending ? 1.5 : 0, color: AppTheme.primary, style: BorderStyle.Dashed })
     .backgroundColor(this.selected ? AppTheme.primary : '#F0F4EE')
     .enabled(this.buttonEnabled)
     .accessibilityText(this.label + (this.selected ? '，已选择' : ''))
@@ -59,6 +63,8 @@ struct ThresholdStepper {
   @Prop label: string = '';
   @Prop valueText: string = '--';
   @Prop unit: string = '';
+  @Prop feedback: string = '';
+  @Prop attention: boolean = false;
   @Prop buttonEnabled: boolean = true;
   onDecrease?: () => void;
   onIncrease?: () => void;
@@ -70,6 +76,7 @@ struct ThresholdStepper {
         Text(this.valueText === '--' ? '--' : this.valueText + ' ' + this.unit)
           .fontSize(18).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        ControlFeedback({ text: this.feedback, attention: this.attention })
       }
       .layoutWeight(1).alignItems(HorizontalAlign.Start)
       Row({ space: 8 }) {
@@ -115,6 +122,9 @@ export struct DeviceDetail {
   navPathStack: NavPathStack = new NavPathStack();
   private oneNetApi: OneNetApiService = new OneNetApiService();
   private refreshTimer: number = -1;
+  private confirmationTimer: number = -1;
+  private pageActive: boolean = false;
+  private pageGeneration: number = 0;
 
   @State deviceId: number = 1;
   @State deviceName: string = '环境节点';
@@ -136,9 +146,13 @@ export struct DeviceDetail {
   @State trendExpanded: boolean = false;
   @State trendMetric: number = 0;
   @State trendAutoFit: boolean = true;
+  @State controlRequests: ControlRequest[] = [];
 
   aboutToDisappear(): void {
+    this.pageActive = false;
+    this.pageGeneration++;
     this.stopAutoRefresh();
+    this.stopControlConfirmation();
   }
 
   private startAutoRefresh(): void {
@@ -157,14 +171,7 @@ export struct DeviceDetail {
     }
   }
 
-  private async autoRefreshTask(): Promise<void> {
-    try {
-      await this.refreshData();
-    } catch (error) {
-      const err = error as Error;
-      this.errorMessage = '自动刷新失败：' + err.message;
-    }
-  }
+  private async autoRefreshTask(): Promise<void> { await this.refresh(); }
 
   private pad(value: number): string {
     return value < 10 ? '0' + value.toString() : value.toString();
@@ -232,7 +239,10 @@ export struct DeviceDetail {
   }
 
   private async refreshData(): Promise<void> {
+    const generation = this.pageGeneration;
+    const queryStartedAt = Date.now();
     const properties = await this.oneNetApi.queryDeviceProperties();
+    if (!this.pageActive || generation !== this.pageGeneration) { return; }
     let hasValue: boolean = false;
     let latestTime: number = 0;
 
@@ -289,65 +299,128 @@ export struct DeviceDetail {
 
     this.lastSyncTime = this.formatTime(new Date());
     this.saveCachedState();
+    this.writeControlRequests(ControlTracker.observe(this.readControlRequests(), properties, queryStartedAt, Date.now()));
+    this.ensureControlConfirmation();
   }
 
   private async refresh(): Promise<void> {
-    if (this.loading) {
-      return;
-    }
-
+    if (!this.pageActive || this.loading) { return; }
+    const generation = this.pageGeneration;
     this.loading = true;
     this.errorMessage = '';
-
-    try {
-      await this.refreshData();
-    } catch (error) {
-      const err = error as Error;
-      this.errorMessage = '刷新失败：' + err.message;
+    try { await this.refreshData(); }
+    catch (error) {
+      if (this.pageActive && generation === this.pageGeneration) {
+        const err = error as Error;
+        this.errorMessage = '刷新失败：' + err.message;
+      }
     } finally {
-      this.loading = false;
+      if (this.pageActive && generation === this.pageGeneration) { this.loading = false; }
     }
   }
 
-  private async setLedMode(mode: number): Promise<void> {
-    if (this.loading) {
-      return;
-    }
+  private readControlRequests(): ControlRequest[] {
+    return ControlTracker.restore(AppStorage.get<string>('monitorControlRequests'), Date.now());
+  }
 
+  private writeControlRequests(requests: ControlRequest[]): void {
+    AppStorage.setOrCreate('monitorControlRequests', JSON.stringify(requests));
+    if (this.pageActive) { this.controlRequests = requests; }
+  }
+
+  private stopControlConfirmation(): void {
+    if (this.confirmationTimer !== -1) { clearInterval(this.confirmationTimer); this.confirmationTimer = -1; }
+  }
+
+  private ensureControlConfirmation(): void {
+    if (!this.pageActive || !ControlTracker.busy(this.controlRequests)) { this.stopControlConfirmation(); return; }
+    if (this.confirmationTimer !== -1) { return; }
+    this.confirmationTimer = setInterval(() => {
+      if (!this.pageActive) { this.stopControlConfirmation(); return; }
+      this.writeControlRequests(this.readControlRequests());
+      if (!ControlTracker.busy(this.controlRequests)) { this.stopControlConfirmation(); return; }
+      if (!this.loading) { this.refresh(); }
+    }, ControlTracker.POLL_MS);
+  }
+
+  private controlOnline(): boolean {
+    const time = TrendHistory.latestReportTime(this.properties);
+    return this.online && time > 0 && Date.now() >= time && Date.now() - time < 30000;
+  }
+
+  private controlEnabled(identifier: string): boolean {
+    const value = PropertyHelper.getValue(this.properties, identifier);
+    return !this.loading && this.controlOnline() && !ControlTracker.busy(this.controlRequests, identifier) &&
+      value.trim() !== '' && Number.isInteger(Number(value));
+  }
+
+  private pendingTarget(identifier: string, target: number): boolean {
+    const request = ControlTracker.find(this.controlRequests, identifier);
+    return request !== undefined && request.target === target && ControlTracker.busy(this.controlRequests, identifier);
+  }
+
+  private controlAttention(identifier: string): boolean {
+    const request = ControlTracker.find(this.controlRequests, identifier);
+    return request !== undefined && (request.phase === ControlPhase.TIMED_OUT || request.phase === ControlPhase.REJECTED ||
+      request.phase === ControlPhase.UNCERTAIN);
+  }
+
+  private controlText(identifier: string): string {
+    const request = ControlTracker.find(this.controlRequests, identifier);
+    if (request === undefined) { return ''; }
+    const target = PropertyHelper.formatValue(identifier, request.target.toString()) + PropertyHelper.getUnit(identifier);
+    const prefix = '目标 ' + target + ' · ';
+    if (request.phase === ControlPhase.SENDING) { return prefix + '发送中'; }
+    if (request.phase === ControlPhase.WAITING) {
+      return prefix + (request.acknowledged ? '设备已应答，等待新上报' : '平台已返回，等待新上报（未提供设备应答）');
+    }
+    if (request.phase === ControlPhase.MATCHED) { return '上次目标 ' + target + ' · ' + (request.message || '新上报值已匹配'); }
+    if (request.phase === ControlPhase.ACKNOWLEDGED) { return '脉冲命令已获设备应答；当前模式以上方上报为准'; }
+    if (request.phase === ControlPhase.TIMED_OUT) { return prefix + '等待上报超时，结果未确认' + (request.acknowledged ? '（设备已应答）' : ''); }
+    if (request.phase === ControlPhase.REJECTED) { return prefix + request.message; }
+    return prefix + '结果未确认：' + request.message;
+  }
+
+  private async sendControl(identifier: string, target: number): Promise<void> {
+    if (!this.pageActive || this.loading || ControlTracker.busy(this.readControlRequests(), identifier)) { return; }
+    if (!this.controlOnline()) { this.online = false; this.errorMessage = '设备上报已过期或未确认，请先刷新设备状态'; return; }
+    const generation = this.pageGeneration;
+    const id = ControlTracker.nextId();
+    const requests = ControlTracker.begin(this.readControlRequests(), id, identifier, target, this.properties, Date.now());
+    if (!requests.some((request: ControlRequest) => request.id === id)) { return; }
     this.loading = true;
     this.errorMessage = '';
-
+    this.writeControlRequests(requests);
+    this.ensureControlConfirmation();
+    let queryAfterReply: boolean = false;
     try {
-      await this.oneNetApi.setLedMode(mode);
-      this.ledMode = mode;
-      // 先保持用户选择的模式，等待 STM32 下一次上报后再由自动刷新确认。
+      let receipt: ControlReceipt;
+      if (identifier === 'led') { receipt = await this.oneNetApi.setLedMode(target); }
+      else if (identifier === 'bump') { receipt = await this.oneNetApi.setBumpMode(target); }
+      else { receipt = await this.oneNetApi.setThreshold(identifier, target); }
+      const next = ControlTracker.received(this.readControlRequests(), id, receipt, Date.now());
+      AppStorage.setOrCreate('monitorControlRequests', JSON.stringify(next));
+      if (this.pageActive && generation === this.pageGeneration) { this.controlRequests = next; }
+      queryAfterReply = receipt.accepted;
     } catch (error) {
       const err = error as Error;
-      this.errorMessage = '控制失败：' + err.message;
+      const next = ControlTracker.uncertain(this.readControlRequests(), id, err.message || '网络请求无明确结果', Date.now());
+      AppStorage.setOrCreate('monitorControlRequests', JSON.stringify(next));
+      if (this.pageActive && generation === this.pageGeneration) { this.controlRequests = next; }
     } finally {
-      this.loading = false;
+      if (this.pageActive && generation === this.pageGeneration) {
+        this.loading = false;
+        this.ensureControlConfirmation();
+        if (queryAfterReply) { await this.refresh(); }
+      }
     }
   }
 
-  private async setBumpMode(mode: number): Promise<void> {
-    if (this.loading) {
-      return;
-    }
+  private async setLedMode(mode: number): Promise<void> { await this.sendControl('led', mode); }
 
-    this.loading = true;
-    this.errorMessage = '';
+  private async setBumpMode(mode: number): Promise<void> { await this.sendControl('bump', mode); }
 
-    try {
-      await this.oneNetApi.setBumpMode(mode);
-      this.bumpMode = mode;
-      // 先保持用户选择的模式，等待 STM32 下一次上报后再由自动刷新确认。
-    } catch (error) {
-      const err = error as Error;
-      this.errorMessage = '控制失败：' + err.message;
-    } finally {
-      this.loading = false;
-    }
-  }
+
 
   private getDisplayValue(identifier: string): string {
     const value = PropertyHelper.formatValue(
@@ -367,10 +440,7 @@ export struct DeviceDetail {
     return PropertyHelper.getUnit(identifier);
   }
 
-  private parseIntValue(value: string, fallback: number): number {
-    const parsed = parseInt(value);
-    return Number.isNaN(parsed) ? fallback : parsed;
-  }
+
 
   private getThresholdMin(identifier: string): number {
     return identifier === 'CO2threhold' ? 350 : 0;
@@ -380,64 +450,15 @@ export struct DeviceDetail {
     return identifier === 'CO2threhold' ? 4000 : 100;
   }
 
-  private updateLocalProperty(identifier: string, value: string): void {
-    const updated: DeviceProperty[] = [];
-    let found = false;
 
-    for (let i: number = 0; i < this.properties.length; i++) {
-      if (this.properties[i].identifier === identifier) {
-        updated.push({
-          identifier: this.properties[i].identifier,
-          value: value,
-          name: this.properties[i].name,
-          dataType: this.properties[i].dataType,
-          accessMode: this.properties[i].accessMode,
-          time: this.properties[i].time
-        });
-        found = true;
-      } else {
-        updated.push(this.properties[i]);
-      }
-    }
-
-    if (!found) {
-      updated.push({ identifier: identifier, value: value });
-    }
-    this.properties = updated;
-  }
 
   private async adjustThreshold(identifier: string, delta: number): Promise<void> {
-    if (this.loading) {
-      return;
-    }
-
-    this.loading = true;
-    this.errorMessage = '';
-
-    try {
-      const current = this.parseIntValue(
-        PropertyHelper.getValue(this.properties, identifier),
-        0
-      );
-      let next = current + delta;
-      const min = this.getThresholdMin(identifier);
-      const max = this.getThresholdMax(identifier);
-
-      if (next < min) {
-        next = min;
-      }
-      if (next > max) {
-        next = max;
-      }
-
-      await this.oneNetApi.setThreshold(identifier, next);
-      this.updateLocalProperty(identifier, next.toString());
-    } catch (error) {
-      const err = error as Error;
-      this.errorMessage = '阈值下发失败：' + err.message;
-    } finally {
-      this.loading = false;
-    }
+    if (this.loading || ControlTracker.busy(this.readControlRequests(), identifier)) { return; }
+    const raw = PropertyHelper.getValue(this.properties, identifier);
+    const current = Number(raw);
+    if (raw.trim() === '' || !Number.isInteger(current)) { this.errorMessage = '尚未取得有效阈值，请先刷新'; return; }
+    const next = Math.max(this.getThresholdMin(identifier), Math.min(this.getThresholdMax(identifier), current + delta));
+    if (next !== current) { await this.sendControl(identifier, next); }
   }
 
   private buildResult(): DeviceDetailParam {
@@ -592,23 +613,26 @@ export struct DeviceDetail {
               unit: this.getUnit('water_vol'), icon: $r('app.media.monitor_water'),
               accent: '#44879B', tint: '#ECF4F7' })
           }.width('100%').margin({ bottom: 10 })
-          SectionHeading({ title: '设备控制', caption: '选择工作模式' })
+          SectionHeading({ title: '设备控制', caption: '实心为上报，描边为目标' })
+          Text('下发后会短时查询确认，完成或超时即停止。')
+            .fontSize(12).fontColor(AppTheme.secondary).lineHeight(19).width('100%').margin({ bottom: 12 })
           Column({ space: 16 }) {
             Row({ space: 10 }) {
               Image($r('app.media.monitor_sun')).width(24).height(24).accessibilityLevel('no')
               Text('照明模式').fontSize(16).fontWeight(FontWeight.Bold)
                 .fontColor(AppTheme.ink).layoutWeight(1)
-              Text(PropertyHelper.getLedModeText(this.ledMode.toString()))
+              Text('上报：' + PropertyHelper.getLedModeText(this.ledMode.toString()))
                 .fontSize(13).fontColor(AppTheme.primary)
             }.width('100%')
             Row({ space: 8 }) {
-              DetailModeButton({ label: '关闭', mode: 0, selected: this.ledMode === 0,
-                buttonEnabled: !this.loading, onModeClick: (mode: number) => { this.setLedMode(mode); } })
-              DetailModeButton({ label: '常亮', mode: 1, selected: this.ledMode === 1,
-                buttonEnabled: !this.loading, onModeClick: (mode: number) => { this.setLedMode(mode); } })
-              DetailModeButton({ label: '自动', mode: 2, selected: this.ledMode === 2,
-                buttonEnabled: !this.loading, onModeClick: (mode: number) => { this.setLedMode(mode); } })
+              DetailModeButton({ label: '关闭', mode: 0, selected: this.ledMode === 0, pending: this.pendingTarget('led', 0),
+                buttonEnabled: this.controlEnabled('led'), onModeClick: (mode: number) => { this.setLedMode(mode); } })
+              DetailModeButton({ label: '常亮', mode: 1, selected: this.ledMode === 1, pending: this.pendingTarget('led', 1),
+                buttonEnabled: this.controlEnabled('led'), onModeClick: (mode: number) => { this.setLedMode(mode); } })
+              DetailModeButton({ label: '自动', mode: 2, selected: this.ledMode === 2, pending: this.pendingTarget('led', 2),
+                buttonEnabled: this.controlEnabled('led'), onModeClick: (mode: number) => { this.setLedMode(mode); } })
             }.width('100%')
+            ControlFeedback({ text: this.controlText('led'), attention: this.controlAttention('led') })
           }
           .width('100%').padding(18).margin({ bottom: 12 })
           .backgroundColor(AppTheme.surface).border({ width: 1, color: AppTheme.border }).borderRadius(22)
@@ -617,41 +641,46 @@ export struct DeviceDetail {
               Image($r('app.media.monitor_water')).width(24).height(24).accessibilityLevel('no')
               Text('灌溉模式').fontSize(16).fontWeight(FontWeight.Bold)
                 .fontColor(AppTheme.ink).layoutWeight(1)
-              Text(PropertyHelper.getBumpModeText(this.bumpMode.toString()))
+              Text('上报：' + PropertyHelper.getBumpModeText(this.bumpMode.toString()))
                 .fontSize(13).fontColor(AppTheme.primary)
             }.width('100%')
             Row({ space: 8 }) {
-              DetailModeButton({ label: '关闭', mode: 0, selected: this.bumpMode === 0,
-                buttonEnabled: !this.loading, onModeClick: (mode: number) => { this.setBumpMode(mode); } })
-              DetailModeButton({ label: '脉冲灌溉', mode: 1, selected: this.bumpMode === 1,
-                buttonEnabled: !this.loading, onModeClick: (mode: number) => { this.setBumpMode(mode); } })
-              DetailModeButton({ label: '自动', mode: 2, selected: this.bumpMode === 2,
-                buttonEnabled: !this.loading, onModeClick: (mode: number) => { this.setBumpMode(mode); } })
+              DetailModeButton({ label: '关闭', mode: 0, selected: this.bumpMode === 0, pending: this.pendingTarget('bump', 0),
+                buttonEnabled: this.controlEnabled('bump'), onModeClick: (mode: number) => { this.setBumpMode(mode); } })
+              DetailModeButton({ label: '脉冲灌溉', mode: 1, selected: this.bumpMode === 1, pending: this.pendingTarget('bump', 1),
+                buttonEnabled: this.controlEnabled('bump'), onModeClick: (mode: number) => { this.setBumpMode(mode); } })
+              DetailModeButton({ label: '自动', mode: 2, selected: this.bumpMode === 2, pending: this.pendingTarget('bump', 2),
+                buttonEnabled: this.controlEnabled('bump'), onModeClick: (mode: number) => { this.setBumpMode(mode); } })
             }.width('100%')
+            ControlFeedback({ text: this.controlText('bump'), attention: this.controlAttention('bump') })
             Text('脉冲灌溉按估算补水量间歇运行，结束后自动关闭。')
               .fontSize(12).fontColor(AppTheme.secondary).width('100%')
           }
           .width('100%').padding(18).margin({ bottom: 12 })
           .backgroundColor(AppTheme.surface).border({ width: 1, color: AppTheme.border }).borderRadius(22)
-          SectionHeading({ title: '阈值设置', caption: '修改后下发设备' })
+          SectionHeading({ title: '阈值设置', caption: '显示设备最近上报值' })
           Column() {
             ThresholdStepper({ label: 'CO₂ 阈值', valueText: this.getDisplayValue('CO2threhold'),
-              unit: this.getUnit('CO2threhold'), buttonEnabled: !this.loading,
+              unit: this.getUnit('CO2threhold'), buttonEnabled: this.controlEnabled('CO2threhold'),
+              feedback: this.controlText('CO2threhold'), attention: this.controlAttention('CO2threhold'),
               onDecrease: () => { this.adjustThreshold('CO2threhold', -100); },
               onIncrease: () => { this.adjustThreshold('CO2threhold', 100); } })
             Divider().color(AppTheme.border)
             ThresholdStepper({ label: '干旱阈值', valueText: this.getDisplayValue('droughtthrehold'),
-              unit: this.getUnit('droughtthrehold'), buttonEnabled: !this.loading,
+              unit: this.getUnit('droughtthrehold'), buttonEnabled: this.controlEnabled('droughtthrehold'),
+              feedback: this.controlText('droughtthrehold'), attention: this.controlAttention('droughtthrehold'),
               onDecrease: () => { this.adjustThreshold('droughtthrehold', -1); },
               onIncrease: () => { this.adjustThreshold('droughtthrehold', 1); } })
             Divider().color(AppTheme.border)
             ThresholdStepper({ label: '湿润阈值', valueText: this.getDisplayValue('moistthrehold'),
-              unit: this.getUnit('moistthrehold'), buttonEnabled: !this.loading,
+              unit: this.getUnit('moistthrehold'), buttonEnabled: this.controlEnabled('moistthrehold'),
+              feedback: this.controlText('moistthrehold'), attention: this.controlAttention('moistthrehold'),
               onDecrease: () => { this.adjustThreshold('moistthrehold', -1); },
               onIncrease: () => { this.adjustThreshold('moistthrehold', 1); } })
             Divider().color(AppTheme.border)
             ThresholdStepper({ label: '温度阈值', valueText: this.getDisplayValue('tempthrehold'),
-              unit: this.getUnit('tempthrehold'), buttonEnabled: !this.loading,
+              unit: this.getUnit('tempthrehold'), buttonEnabled: this.controlEnabled('tempthrehold'),
+              feedback: this.controlText('tempthrehold'), attention: this.controlAttention('tempthrehold'),
               onDecrease: () => { this.adjustThreshold('tempthrehold', -1); },
               onIncrease: () => { this.adjustThreshold('tempthrehold', 1); } })
           }
@@ -724,11 +753,15 @@ export struct DeviceDetail {
     .bindContentCover($$this.trendExpanded, this.expandedTrendView(), { modalTransition: ModalTransition.DEFAULT })
     .title('设备详情')
     .onBackPressed(() => {
+      this.pageActive = false; this.pageGeneration++; this.stopControlConfirmation(); this.stopAutoRefresh();
       this.navPathStack.pop(this.buildResult());
       return true;
     })
     .onReady((context: NavDestinationContext) => {
+      this.pageActive = true; this.pageGeneration++;
       this.navPathStack = context.pathStack;
+      this.writeControlRequests(this.readControlRequests());
+      this.ensureControlConfirmation();
 
       const param = context.pathInfo.param as DeviceDetailParam;
       if (param) {
@@ -751,6 +784,8 @@ export struct DeviceDetail {
           this.ledMode = parseInt(led);
         }
 
+        const bump = PropertyHelper.getValue(param.properties, 'bump');
+        if (bump !== '') { this.bumpMode = parseInt(bump); }
         this.restoreCachedHistory();
         this.refresh();
         this.startAutoRefresh();

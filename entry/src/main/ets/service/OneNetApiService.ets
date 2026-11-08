@@ -1,6 +1,7 @@
 import { util } from '@kit.ArkTS';
 import { http } from '@kit.NetworkKit';
 import { OneNetConfig } from '../config/OneNetConfig';
+import { ControlReceipt, ControlSetResponse, ControlTracker } from '../model/ControlTracker';
 import {
   DeviceCloudStatus,
   DeviceProperty
@@ -19,11 +20,6 @@ interface OneNetQueryResponse {
   code?: number | string;
   msg?: string;
   data?: OneNetPropertyItem[] | null;
-}
-
-interface OneNetSetResponse {
-  code?: number | string;
-  msg?: string;
 }
 
 interface OneNetDeviceDetailData {
@@ -153,22 +149,23 @@ export class OneNetApiService {
     }
   }
 
-  async setLedMode(mode: number): Promise<void> {
-    await this.setDeviceProperty('led', mode);
+  async setLedMode(mode: number): Promise<ControlReceipt> {
+    return await this.setDeviceProperty('led', mode);
   }
 
-  async setBumpMode(mode: number): Promise<void> {
-    await this.setDeviceProperty('bump', mode);
+  async setBumpMode(mode: number): Promise<ControlReceipt> {
+    return await this.setDeviceProperty('bump', mode);
   }
 
-  async setThreshold(identifier: string, value: number): Promise<void> {
-    await this.setDeviceProperty(identifier, value);
+  async setThreshold(identifier: string, value: number): Promise<ControlReceipt> {
+    return await this.setDeviceProperty(identifier, value);
   }
 
   private async setDeviceProperty(
     identifier: string,
     value: number
-  ): Promise<void> {
+  ): Promise<ControlReceipt> {
+    if (!ControlTracker.supported(identifier) || !Number.isInteger(value)) { throw new Error('不支持的控制属性或数值'); }
     const httpRequest = http.createHttp();
 
     try {
@@ -213,9 +210,9 @@ export class OneNetApiService {
       this.ensureHttpOk(response.responseCode);
 
       const result =
-        JSON.parse(response.result as string) as OneNetSetResponse;
+        JSON.parse(response.result as string) as ControlSetResponse;
 
-      this.ensureApiOk(result.code, result.msg, '下发设备属性');
+      return ControlTracker.decode(result);
     } finally {
       httpRequest.destroy();
     }

@@ -8,6 +8,7 @@ import {
 } from '../model/DeviceModels';
 import { TrendHistory } from '../model/TrendHistory';
 import { OneNetApiService } from '../service/OneNetApiService';
+import { ControlTracker } from '../model/ControlTracker';
 
 import { AppTheme } from '../theme/AppTheme';
 import { MetricCard, OfflineNotice, SectionHeading, StatusBadge, SyncErrorCard, SyncToolbar } from '../components/MonitorComponents';
@@ -238,6 +239,7 @@ struct Index {
   }
 
   private async refreshOneNetData(): Promise<void> {
+    const queryStartedAt = Date.now();
     const properties = await this.oneNetApi.queryDeviceProperties();
     let hasValue: boolean = false;
     let latestTime: number = 0;
@@ -290,6 +292,8 @@ struct Index {
 
     this.lastSyncTime = this.formatTime(new Date());
     this.saveCachedState();
+    const requests = ControlTracker.restore(AppStorage.get<string>('monitorControlRequests'), Date.now());
+    AppStorage.setOrCreate('monitorControlRequests', JSON.stringify(ControlTracker.observe(requests, properties, queryStartedAt, Date.now())));
   }
 
   private async syncOneNet(): Promise<void> {
@@ -310,25 +314,7 @@ struct Index {
     }
   }
 
-  private async setLedMode(mode: number): Promise<void> {
-    if (this.loading) {
-      return;
-    }
 
-    this.loading = true;
-    this.errorMessage = '';
-
-    try {
-      await this.oneNetApi.setLedMode(mode);
-      this.ledMode = mode;
-      await this.refreshOneNetData();
-    } catch (error) {
-      const err = error as Error;
-      this.errorMessage = '设备控制失败：' + err.message;
-    } finally {
-      this.loading = false;
-    }
-  }
 
   private buildDetailResult(): DeviceDetailParam {
     return {
@@ -373,20 +359,6 @@ struct Index {
         this.syncOneNet();
       }
     );
-  }
-
-  @Builder
-  modeButton(label: string, mode: number) {
-    Button(label)
-      .fontSize(13)
-      .height(40)
-      .layoutWeight(1)
-      .backgroundColor(this.ledMode === mode ? '#1D6FE8' : '#F2F4F7')
-      .fontColor(this.ledMode === mode ? Color.White : '#344054')
-      .enabled(!this.loading)
-      .onClick(() => {
-        this.setLedMode(mode);
-      })
   }
 
   private displayValue(identifier: string): string {

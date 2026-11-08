@@ -22,3 +22,14 @@ app-trend-regressions.cjs 读取实际 entry/src/main/ets/model/TrendHistory.ets
 连续视窗新增15场景43项，覆盖滚轮倍率、1～10倍限制、锚点、独立轴、平移、裁剪坐标、滑条映射和毫秒时间。原有趋势去重/缓存回归继续运行；不模拟真实轴事件或触屏路由，后者按docs/12实际操作验证。
 
 用户将上限下调为10倍，生产边界和滑条共用MAX_ZOOM，原上限用例同步改为10倍预期。
+
+## App控制回归
+
+新增app-control-regressions.cjs，40场景152项检查。读取生产ControlTracker、OneNetApiService与提取的DeviceDetail方法，模拟网络、时钟、定时器和AppStorage。测试不访问OneNET，不加载真实配置，不执行ArkUI渲染。
+
+```powershell
+& 'F:\DEVECO\DevEco Studio\tools\node\node.exe' `
+  'E:\harmony\HarmonyEmbeddedLab\tests\app-control-regressions.cjs'
+```
+
+可用--root指定App仓库根目录，--compiler指定SDK转译器。覆盖设备应答、上报匹配、期限、重复发送保护、旧回包、页面离开、关闭自动刷新与脉冲命令。联机和界面五项验收见docs/13。
