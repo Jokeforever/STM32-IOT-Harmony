@@ -529,6 +529,11 @@
               <FileType>1</FileType>
               <FilePath>..\modules\app\src\app_config.c</FilePath>
             </File>
+            <File>
+              <FileName>app_config_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\modules\app\src\app_config_port.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

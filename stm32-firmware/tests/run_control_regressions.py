@@ -93,7 +93,9 @@ typedef enum { DISPLAY_NONE=0, DISPLAY_SCREEN1, DISPLAY_SCREEN2, DISPLAY_SCREEN3
 #endif
 ''')
 header('mw_config.h', read('modules/middleware/inc/mw_config.h'))
+header('mw_config_port.h', read('modules/middleware/inc/mw_config_port.h'))
 header('i2c.h', '''#include "stm32f1xx_hal.h"
+#define EEPROM_24C02_SIZE 256U
 uint8_t EEPROM24C02_Read(uint8_t addr, uint8_t *buf, uint16_t len);
 uint8_t EEPROM24C02_Write(uint8_t addr, const uint8_t *buf, uint16_t len);
 ''')
@@ -108,6 +110,7 @@ harness = r'''
 #include "jdq.h"
 #include "beep.h"
 #include "mw_config.h"
+#include "mw_config_port.h"
 #include "app_sensors.h"
 #include "app_config.h"
 #include <stddef.h>
@@ -137,6 +140,7 @@ static unsigned pwm_writes;
 static int pins[3][16];
 static uint8_t eeprom[256];
 static unsigned fail_write,fail_read,corrupt_write;
+static unsigned read_calls,write_calls;
 uint32_t mock_irq_mask;
 unsigned inject_completion;
 int _fltused = 0;
@@ -158,10 +162,10 @@ void OLED_ShowCHinese(int x,int y,int s) { (void)x;(void)y;(void)s; }
 void *memset(void *p,int c,size_t n) { uint8_t *b=p; while(n--) *b++=(uint8_t)c; return p; }
 void *memcpy(void *p,const void *s,size_t n) { uint8_t *b=p;const uint8_t *a=s;while(n--) *b++=*a++;return p; }
 uint8_t EEPROM24C02_Read(uint8_t a,uint8_t *b,uint16_t n) {
-    unsigned i; if (fail_read || (unsigned)a+n>256) return 0; for(i=0;i<n;i++) b[i]=eeprom[a+i]; return 1;
+    unsigned i; read_calls++; if (fail_read || (unsigned)a+n>256) return 0; for(i=0;i<n;i++) b[i]=eeprom[a+i]; return 1;
 }
 uint8_t EEPROM24C02_Write(uint8_t a,const uint8_t *b,uint16_t n) {
-    unsigned i; if (fail_write || (unsigned)a+n>256) return 0; for(i=0;i<n;i++) eeprom[a+i]=b[i]; if(corrupt_write)eeprom[a]^=1; return 1;
+    unsigned i; write_calls++; if (fail_write || (unsigned)a+n>256) return 0; for(i=0;i<n;i++) eeprom[a+i]=b[i]; if(corrupt_write)eeprom[a]^=1; return 1;
 }
 static const uint8_t legacy_v2[] = {49,71,70,67,2,0,48,0,7,0,2,0,65,33,252,8,120,0,8,7,25,0,85,0,217,4,255,15,244,1,17,0,219,5,0,0,123,0,0,0,200,1,0,0,211,10,200,96};
 static const uint8_t legacy_v2_next[] = {49,71,70,67,2,0,48,0,8,0,2,0,65,33,252,8,120,0,8,7,25,0,85,0,217,4,255,15,244,1,17,0,219,5,0,0,123,0,0,0,200,1,0,0,148,152,216,76};
@@ -532,13 +536,26 @@ int main(void) {
      led_ctrl.enabled=0;LED_Update(1);CHECK(pwm_writes==before);CHECK(led_ctrl.current_lux==200);
      led_ctrl.enabled=1;
     }
+    /* 真实适配函数：先检查范围再窄化，不把大偏移截成8位地址。 */
+    {uint8_t byte=77;unsigned r=read_calls,w=write_calls;
+     CHECK(ConfigPort_Read(0,0,1)==0);CHECK(ConfigPort_Read(0,&byte,0)==0);
+     CHECK(ConfigPort_Read(256,&byte,1)==0);CHECK(ConfigPort_Read(255,&byte,2)==0);
+     CHECK(ConfigPort_Read(65535,&byte,1)==0);CHECK(read_calls==r);
+     CHECK(ConfigPort_Write(0,0,1)==0);CHECK(ConfigPort_Write(0,&byte,0)==0);
+     CHECK(ConfigPort_Write(256,&byte,1)==0);CHECK(ConfigPort_Write(255,&byte,2)==0);
+     CHECK(ConfigPort_Write(65535,&byte,1)==0);CHECK(write_calls==w);
+     CHECK(ConfigPort_Write(255,&byte,1)!=0);byte=0;CHECK(ConfigPort_Read(255,&byte,1)!=0);CHECK(byte==77);
+     fail_write=1;CHECK(ConfigPort_Write(0,&byte,1)==0);fail_write=0;
+     fail_read=1;CHECK(ConfigPort_Read(0,&byte,1)==0);fail_read=0;
+     tick=0xFFFFFFF0U;CHECK(ConfigPort_NowMs()==tick);tick=32;CHECK(ConfigPort_NowMs()==32);
+    }
     return assertions==EXPECTED_ASSERTIONS?0:32000;
 }
 '''
 expected_assertions=harness.count('CHECK(')-1+47
 harness=harness.replace('EXPECTED_ASSERTIONS',str(expected_assertions))
 (OUT / 'test.c').write_text(harness, encoding='utf-8')
-source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c']
+source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c']
 sources = []
 for rel in source_rel:
     p = OUT / Path(rel).name

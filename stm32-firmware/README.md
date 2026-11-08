@@ -11,7 +11,17 @@
 5. 真实 WiFi、OneNET 设备密钥和 App 用户密钥不得进入仓库。
 6. 源码保持 UTF-8；未明确要求时不生成 HAP，不自动烧录、不清空 EEPROM。
 
-## 最新验证状态（2026-11-07，PID分离）
+## 最新验证状态（2026-11-08，配置存储接口）
+
+- 配置核心已通过ConfigPort_Read/Write/NowMs访问存储和时基，当前24C02/HAL适配集中在app_config_port.c。
+- 用户确认本轮旧配置加载、App保存、本机保存、连续修改保留最后值、持续运行五项全部通过。
+- 1000次新旧存储操作轨迹对比、配置/控制313项、PID36925项、采集9030项主机验证通过。
+- 11月7日真实Keil完整编译0错误5个既有cJSON警告；Code=48698、RO=6526、RW=204、ZI=7948。
+- 11月8日确认后同步脱敏副本；24C02底层驱动、主循环、App、OneNET及EEPROM格式不变。
+- 仍保留AppConfig业务映射依赖；并非整个配置模块已完全独立。泵/风扇/继电器负载测试仍暂缓。
+- 用户已授权本轮提交并上传；此前e440700（PID）、8e9b5cb（运行配置）、040afe2（传感器）已上传。
+
+## 上一阶段验证记录（2026-11-07，PID分离）
 
 - 独立mw_pid和LED适配分离完成，用户确认本轮五项检查全部通过。
 - 验收覆盖启动数据、模式切换、自动调光方向、反复切换后的响应、掉电保存及持续运行。
@@ -19,7 +29,7 @@
 - 真实Keil完整编译0错误5个既有cJSON警告；Code=48598、RO=6530、RW=204、ZI=7948。
 - 实测确认后同步仓库脱敏副本；App源码、配置格式、OneNET属性及网络凭据未改。
 - 泵/风扇/继电器实体负载测试仍暂缓；当前灯带与光敏的光学耦合、实际PID整定仍待硬件条件改善。
-- 用户已授权本轮PID提交并上传Git；运行配置8e9b5cb、传感器模型040afe2已上传。
+- PID分离e440700已上传，运行配置8e9b5cb、传感器模型040afe2也已上传。
 
 ## 上一阶段验证记录（2026-11-07，运行配置）
 
@@ -205,3 +215,6 @@ ESP8266 要求：
 
 - PID纯算法：modules/middleware/src/mw_pid.c；适配：Core/Src/LED.c。
 - PID独立测试：tests/run_pid_regressions.py；完整学习和验收：docs/2026-11-07-PID-Separation.md（仓库总入口docs/10）。
+
+- 配置存储/时基契约：modules/middleware/inc/mw_config_port.h；当前适配：modules/app/src/app_config_port.c。
+- 对照测试：tests/run_config_port_regressions.py；学习与验收：docs/2026-11-07-Config-Port.md（仓库总入口docs/11）。

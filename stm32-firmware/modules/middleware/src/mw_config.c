@@ -9,13 +9,13 @@
  *   2026-11-01：运行参数通过AppConfig映射，保留v1/v2存储布局及槽/CRC流程。
  *
  * 依赖：
- *   - EEPROM24C02_Read / EEPROM24C02_Write   （drivers 层）
+ *   - ConfigPort_Read / Write / NowMs         （平台接口）
  *   - AppConfig运行参数服务                    （app 层）
- *   - HAL_GetTick()                          （bsp 层）
+ *   - 具体24C02/HAL调用在app_config_port.c，业务映射依赖仍保留。
  */
 
 #include "mw_config.h"
-#include "i2c.h"          /* EEPROM24C02_Read / Write */
+#include "mw_config_port.h"
 #include "app_config.h"
 
 #include <string.h>
@@ -178,7 +178,7 @@ static uint8_t Config_ReadSlot(uint8_t slot_addr, DeviceConfig *out, uint8_t *is
 {
     ConfigSlot slot;
 
-    if (EEPROM24C02_Read(slot_addr, slot.raw, (uint16_t)sizeof(slot.raw)) == 0U)
+    if (ConfigPort_Read(slot_addr, slot.raw, (uint16_t)sizeof(slot.raw)) == 0U)
     {
         return 0U;
     }
@@ -399,7 +399,7 @@ void Config_Load(void)
         Config_SetDefault();
         g_config_active_slot = 0U;
         g_config_dirty = 1U;
-        g_config_dirty_tick = HAL_GetTick();
+        g_config_dirty_tick = ConfigPort_NowMs();
     }
 
     g_config_sequence = g_device_config.sequence;
@@ -414,7 +414,7 @@ void Config_Load(void)
     {
         /* 从 v1 迁移过来的配置需要重新写入 v2 格式 */
         g_config_dirty = 1U;
-        g_config_dirty_tick = HAL_GetTick();
+        g_config_dirty_tick = ConfigPort_NowMs();
     }
 }
 
@@ -426,11 +426,11 @@ uint8_t Config_Save(void)
 
     Config_FromCurrent(&config);
 
-    if (EEPROM24C02_Write(slot, (const uint8_t *)&config, (uint16_t)sizeof(config)) == 0U)
+    if (ConfigPort_Write(slot, (const uint8_t *)&config, (uint16_t)sizeof(config)) == 0U)
     {
         return 0U;
     }
-    if (EEPROM24C02_Read(slot, (uint8_t *)&verify, (uint16_t)sizeof(verify)) == 0U)
+    if (ConfigPort_Read(slot, (uint8_t *)&verify, (uint16_t)sizeof(verify)) == 0U)
     {
         return 0U;
     }
@@ -448,7 +448,7 @@ uint8_t Config_Save(void)
 void Config_MarkDirty(void)
 {
     g_config_dirty = 1U;
-    g_config_dirty_tick = HAL_GetTick();
+    g_config_dirty_tick = ConfigPort_NowMs();
 }
 
 uint8_t Config_IsDirty(void)
@@ -462,7 +462,7 @@ void Config_Process(void)
     {
         return;
     }
-    if ((HAL_GetTick() - g_config_dirty_tick) < 1000U)
+    if ((ConfigPort_NowMs() - g_config_dirty_tick) < 1000U)
     {
         return;
     }
@@ -473,6 +473,6 @@ void Config_Process(void)
     }
     else
     {
-        g_config_dirty_tick = HAL_GetTick();
+        g_config_dirty_tick = ConfigPort_NowMs();
     }
 }

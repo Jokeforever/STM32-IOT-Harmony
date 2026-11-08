@@ -1,5 +1,15 @@
 # STM32 端代码功能讲解（完整版）
 
+## 2026-11-08 当前配置存储适配
+
+mw_config_port.h只声明字节Read/Write与NowMs契约，app_config_port.c适配当前24C02和HAL。
+mw_config.c不再包含i2c.h或直接调用HAL_GetTick；仍包含AppConfig业务映射依赖。
+存储区偏移使用uint16_t，当前适配先检查0..255范围再窄化，Write需要完整同步完成。
+Config_* API、DeviceConfig v2/48字节及CRC偏移44、v1迁移和原延时保存均保留。
+测试夹具config_before_port.c不进入目标工程；新增1000次旧/新操作轨迹对照，控制回归更新为313项。
+11月7日完整编译0错误5个既有警告，11月8日用户确认本轮五项检查通过。
+本轮没有修改I2C驱动和主循环；接口与未来平台适配注意点见docs/11-Configuration-Port.md。
+
 ## 2026-11-07 PID纯算法与LED适配（当前实现）
 
 PID计算位于modules/middleware/src/mw_pid.c，接口为PID_Reset与PID_Update。

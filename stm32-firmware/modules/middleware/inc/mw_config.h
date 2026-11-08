@@ -12,8 +12,8 @@
  *   - 参数变化后延时写入，避免频繁擦写 EEPROM
  *
  * 迁移提示（换 MCU 时）：
- *   实现依赖 EEPROM24C02_Read/Write、HAL_GetTick 与 AppConfig 服务。
- *   换平台需要检查存储接口、时基及服务适配；本头文件的存储结构须保持兼容。
+ *   实现通过 mw_config_port.h 访问字节存储和毫秒时基，仍依赖 AppConfig 业务映射。
+ *   当前适配为app_config_port.c中的24C02/HAL；换平台检查此适配，存储记录须保持兼容。
  */
 
 #ifndef __MW_CONFIG_H
