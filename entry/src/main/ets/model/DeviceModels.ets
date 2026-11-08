@@ -56,12 +56,35 @@ export interface DeviceProperty {
   time?: number;
 }
 
+export interface TrendPoint {
+  time: number;
+  value: number;
+}
+
+export interface TrendRange {
+  min: number;
+  max: number;
+}
+
+export interface TrendViewport {
+  timeMin: number;
+  timeMax: number;
+  valueMin: number;
+  valueMax: number;
+}
+
+export interface TrendHistories {
+  tempHistory: TrendPoint[];
+  humiHistory: TrendPoint[];
+}
+
 export interface CachedAppState {
   properties: DeviceProperty[];
   lastSyncTime: string;
   lastReportTime: number;
-  tempHistory: number[];
-  humiHistory: number[];
+  historyVersion?: number;
+  tempHistory: TrendPoint[];
+  humiHistory: TrendPoint[];
 }
 
 export interface DeviceCloudStatus {

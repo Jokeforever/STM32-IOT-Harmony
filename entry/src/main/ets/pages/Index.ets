@@ -6,6 +6,7 @@ import {
   DeviceState,
   PropertyHelper
 } from '../model/DeviceModels';
+import { TrendHistory } from '../model/TrendHistory';
 import { OneNetApiService } from '../service/OneNetApiService';
 
 import { AppTheme } from '../theme/AppTheme';
@@ -218,25 +219,20 @@ struct Index {
     }
   }
 
-  private saveCachedState(): void {
-    let tempHistory: number[] = [];
-    let humiHistory: number[] = [];
-    const raw = AppStorage.get<string>('cachedAppState');
-    if (raw !== undefined && raw !== '') {
-      try {
-        const existing = JSON.parse(raw) as CachedAppState;
-        tempHistory = existing.tempHistory ?? [];
-        humiHistory = existing.humiHistory ?? [];
-      } catch (error) {
-      }
-    }
+  private reportTimeText(): string {
+    const time = TrendHistory.latestReportTime(this.properties);
+    return time > 0 ? this.formatTime(new Date(time)) : '--';
+  }
 
+  private saveCachedState(): void {
+    const history = TrendHistory.collect(AppStorage.get<string>('cachedAppState'), this.properties);
     const cached: CachedAppState = {
       properties: this.properties,
       lastSyncTime: this.lastSyncTime,
       lastReportTime: this.lastReportTime,
-      tempHistory: tempHistory,
-      humiHistory: humiHistory
+      historyVersion: TrendHistory.VERSION,
+      tempHistory: history.tempHistory,
+      humiHistory: history.humiHistory
     };
     AppStorage.setOrCreate('cachedAppState', JSON.stringify(cached));
   }
@@ -429,6 +425,12 @@ struct Index {
               .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
           .width('100%').padding({ top: 14, bottom: 14 })
+          Row({ space: 7 }) {
+            Text('设备上报').fontSize(12).fontColor(AppTheme.secondary)
+            Text(this.reportTimeText())
+              .fontSize(12).fontColor(AppTheme.ink).layoutWeight(1).textAlign(TextAlign.End)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }.width('100%').padding({ bottom: 14 })
 
           if (this.errorMessage !== '') {
             SyncErrorCard({ message: this.errorMessage }).margin({ bottom: 12 })

@@ -3,11 +3,14 @@ import {
   DeviceDetailParam,
   DeviceProperty,
   DeviceState,
-  PropertyHelper
+  PropertyHelper,
+  TrendPoint
 } from '../model/DeviceModels';
+import { TrendHistory } from '../model/TrendHistory';
 import { OneNetApiService } from '../service/OneNetApiService';
 
 import { AppTheme } from '../theme/AppTheme';
+import { HistoryChart } from '../components/HistoryChart';
 import { MetricCard, OfflineNotice, SectionHeading, StatusBadge, SyncErrorCard, SyncToolbar } from '../components/MonitorComponents';
 
 @Component
@@ -108,77 +111,6 @@ struct SensorStatusRow {
 }
 
 @Component
-struct HistoryChart {
-  @Prop title: string = '';
-  @Prop values: number[] = [];
-  @Prop color: string = '#28634E';
-  @Prop minValue: number = 0;
-  @Prop maxValue: number = 100;
-  @Prop unit: string = '';
-  @State plotWidth: number = 280;
-
-  private buildPoints(): number[][] {
-    const points: number[][] = [];
-    const span = this.maxValue - this.minValue;
-    for (let i: number = 0; i < this.values.length; i++) {
-      const x = 4 + (this.values.length === 1 ? 0 : ((this.plotWidth - 8) * i) / (this.values.length - 1));
-      const value = Math.max(this.minValue, Math.min(this.maxValue, this.values[i]));
-      const y = span === 0 ? 88 : 88 - ((value - this.minValue) / span) * 80;
-      points.push([x, y]);
-    }
-    return points;
-  }
-
-  build() {
-    Column({ space: 12 }) {
-      Row() {
-        Column({ space: 5 }) {
-          Text(this.title).fontSize(14).fontColor(AppTheme.ink)
-          Text('最近 ' + this.values.length.toString() + ' 次同步')
-            .fontSize(11).fontColor(AppTheme.muted)
-        }
-        .alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Text(this.values.length > 0 ? this.values[this.values.length - 1].toFixed(1) + this.unit : '--')
-          .fontSize(23).fontWeight(FontWeight.Bold).fontColor(this.color)
-      }
-      .width('100%')
-      Stack({ alignContent: Alignment.TopStart }) {
-        Column() {
-          Divider().color('#E9EEE7')
-          Blank()
-          Divider().color('#E9EEE7')
-          Blank()
-          Divider().color('#E9EEE7')
-        }
-        .width('100%').height(80).margin({ top: 8 })
-        if (this.values.length < 2) {
-          Text('同步后生成趋势曲线').fontSize(12).fontColor(AppTheme.muted)
-            .width('100%').height(96).textAlign(TextAlign.Center)
-        } else {
-          Polyline({ width: this.plotWidth, height: 96 })
-            .points(this.buildPoints()).stroke(this.color).strokeWidth(3)
-            .fill(Color.Transparent)
-        }
-      }
-      .width('100%').height(96)
-      .onAreaChange((_oldArea: Area, newArea: Area) => {
-        const width = parseFloat(newArea.width.toString());
-        if (width > 8 && this.plotWidth !== width) {
-          this.plotWidth = width;
-        }
-      })
-      Row() {
-        Text(this.minValue.toString() + this.unit).fontSize(11).fontColor(AppTheme.muted)
-        Blank()
-        Text(this.maxValue.toString() + this.unit).fontSize(11).fontColor(AppTheme.muted)
-      }
-      .width('100%')
-    }
-    .width('100%').padding({ top: 4, bottom: 4 })
-  }
-}
-
-@Component
 export struct DeviceDetail {
   navPathStack: NavPathStack = new NavPathStack();
   private oneNetApi: OneNetApiService = new OneNetApiService();
@@ -199,8 +131,11 @@ export struct DeviceDetail {
   @State errorMessage: string = '';
   @State autoRefresh: boolean = true;
   @State propertiesExpanded: boolean = false;
-  @State tempHistory: number[] = [];
-  @State humiHistory: number[] = [];
+  @State tempHistory: TrendPoint[] = [];
+  @State humiHistory: TrendPoint[] = [];
+  @State trendExpanded: boolean = false;
+  @State trendMetric: number = 0;
+  @State trendAutoFit: boolean = true;
 
   aboutToDisappear(): void {
     this.stopAutoRefresh();
@@ -256,26 +191,28 @@ export struct DeviceDetail {
   }
 
   private restoreCachedHistory(): void {
-    const raw = AppStorage.get<string>('cachedAppState');
-    if (raw === undefined || raw === '') {
-      return;
-    }
+    const history = TrendHistory.fromRaw(AppStorage.get<string>('cachedAppState'));
+    this.tempHistory = history.tempHistory;
+    this.humiHistory = history.humiHistory;
+  }
 
-    try {
-      const cached = JSON.parse(raw) as CachedAppState;
-      this.tempHistory = cached.tempHistory ?? [];
-      this.humiHistory = cached.humiHistory ?? [];
-    } catch (error) {
-    }
+  private reportTimeText(): string {
+    const time = TrendHistory.latestReportTime(this.properties);
+    return time > 0 ? this.formatTime(new Date(time)) : '--';
   }
 
   private saveCachedState(): void {
+    // 查询结束后再读取共享缓存，避免较旧页面的历史覆盖新点。
+    const history = TrendHistory.collect(AppStorage.get<string>('cachedAppState'), this.properties);
+    this.tempHistory = history.tempHistory;
+    this.humiHistory = history.humiHistory;
     const cached: CachedAppState = {
       properties: this.properties,
       lastSyncTime: this.lastSyncTime,
       lastReportTime: this.lastReportTime,
-      tempHistory: this.tempHistory,
-      humiHistory: this.humiHistory
+      historyVersion: TrendHistory.VERSION,
+      tempHistory: history.tempHistory,
+      humiHistory: history.humiHistory
     };
     AppStorage.setOrCreate('cachedAppState', JSON.stringify(cached));
   }
@@ -292,15 +229,6 @@ export struct DeviceDetail {
 
   private isSensorValid(bit: number): boolean {
     return (this.getSensorStatusMask() & (1 << bit)) !== 0;
-  }
-
-  private pushHistory(history: number[], value: number): number[] {
-    const next: number[] = history.slice();
-    next.push(value);
-    if (next.length > 20) {
-      next.shift();
-    }
-    return next;
   }
 
   private async refreshData(): Promise<void> {
@@ -329,13 +257,11 @@ export struct DeviceDetail {
       const temp = PropertyHelper.getValue(properties, 'temp');
       if (temp !== '') {
         this.temperature = parseFloat(temp);
-        this.tempHistory = this.pushHistory(this.tempHistory, this.temperature);
       }
 
       const humi = PropertyHelper.getValue(properties, 'humi');
       if (humi !== '') {
         this.humidity = parseFloat(humi);
-        this.humiHistory = this.pushHistory(this.humiHistory, this.humidity);
       }
 
       const led = PropertyHelper.getValue(properties, 'led');
@@ -528,6 +454,70 @@ export struct DeviceDetail {
     };
   }
 
+  private openTrend(metric: number): void {
+    this.trendMetric = metric;
+    this.trendAutoFit = true;
+    this.trendExpanded = true;
+  }
+
+  @Builder
+  expandedTrendView() {
+    Column({ space: 16 }) {
+      Row({ space: 12 }) {
+        Column({ space: 4 }) {
+          Text('温湿度趋势').fontSize(23).fontWeight(FontWeight.Bold).fontColor(AppTheme.ink)
+          Text('按实际上报时间展示').fontSize(12).fontColor(AppTheme.secondary)
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        Button({ type: ButtonType.Normal }) {
+          Text('关闭').fontSize(14).fontColor(AppTheme.primary)
+        }.width(64).height(44).padding(0).backgroundColor(AppTheme.pale).borderRadius(14)
+        .accessibilityText('关闭放大趋势')
+        .onClick(() => { this.trendExpanded = false; })
+      }.width('100%')
+      Scroll() {
+        Column({ space: 16 }) {
+          Row({ space: 8 }) {
+            DetailModeButton({ label: '空气温度', mode: 0, selected: this.trendMetric === 0,
+              onModeClick: (mode: number) => { this.trendMetric = mode; } })
+            DetailModeButton({ label: '空气湿度', mode: 1, selected: this.trendMetric === 1,
+              onModeClick: (mode: number) => { this.trendMetric = mode; } })
+          }.width('100%')
+          Row({ space: 8 }) {
+            DetailModeButton({ label: '局部放大', mode: 1, selected: this.trendAutoFit,
+              onModeClick: (_mode: number) => { this.trendAutoFit = true; } })
+            DetailModeButton({ label: '完整量程', mode: 0, selected: !this.trendAutoFit,
+              onModeClick: (_mode: number) => { this.trendAutoFit = false; } })
+          }.width('100%')
+          Column() {
+            if (this.trendMetric === 0) {
+              HistoryChart({ title: '空气温度', samples: this.tempHistory, color: '#B77B45',
+                minValue: 0, maxValue: 50, unit: '℃', enlarged: true, autoFit: this.trendAutoFit, plotHeight: 280 })
+            } else {
+              HistoryChart({ title: '空气湿度', samples: this.humiHistory, color: '#3D8D9C',
+                minValue: 0, maxValue: 100, unit: '%', enlarged: true, autoFit: this.trendAutoFit, plotHeight: 280 })
+            }
+          }.width('100%').padding(18).backgroundColor(AppTheme.surface)
+          .border({ width: 1, color: AppTheme.border }).borderRadius(22)
+          Row({ space: 12 }) {
+            Text(this.autoRefresh ? '跟随详情页自动刷新' : '自动刷新已关闭')
+              .fontSize(12).fontColor(AppTheme.secondary).layoutWeight(1)
+            Button({ type: ButtonType.Normal }) {
+              Text(this.loading ? '刷新中' : '立即刷新').fontSize(14).fontColor(AppTheme.primary)
+            }.height(44).padding({ left: 18, right: 18 }).borderRadius(14)
+            .backgroundColor(AppTheme.pale).enabled(!this.loading)
+            .onClick(() => { this.refresh(); })
+          }.width('100%')
+          Text('仅显示本机获取的最近 20 条有效上报。放大只改变图表显示，不改变传感器读数。')
+            .fontSize(12).fontColor(AppTheme.secondary).width('100%').lineHeight(20)
+          if (this.errorMessage !== '') {
+            SyncErrorCard({ message: this.errorMessage })
+          }
+        }.width('100%').padding({ bottom: 24 })
+      }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
+    }.width('100%').height('100%').padding({ left: 20, right: 20, top: 16, bottom: 16 })
+    .backgroundColor(AppTheme.background)
+  }
+
   build() {
     NavDestination() {
       Scroll() {
@@ -548,6 +538,7 @@ export struct DeviceDetail {
             Divider().color(AppTheme.border)
             Column() {
               DetailPropertyRow({ label: '最后同步', value: this.lastSyncTime })
+              DetailPropertyRow({ label: '设备上报', value: this.reportTimeText() })
               DetailPropertyRow({ label: '最后在线', value: this.formatCloudTime(this.lastOnlineTime) })
             }
             .width('100%')
@@ -667,11 +658,13 @@ export struct DeviceDetail {
           .width('100%').padding({ left: 18, right: 18, top: 2, bottom: 2 })
           .backgroundColor(AppTheme.surface).border({ width: 1, color: AppTheme.border }).borderRadius(22)
 
-          SectionHeading({ title: '温湿度趋势', caption: '最多保留 20 次同步' })
+          SectionHeading({ title: '温湿度趋势', caption: '最多保留 20 条上报' })
           Column({ space: 18 }) {
-            HistoryChart({ title: '空气温度', values: this.tempHistory, color: '#B77B45', minValue: 0, maxValue: 50, unit: '℃' })
+            HistoryChart({ title: '空气温度', samples: this.tempHistory, color: '#B77B45', minValue: 0, maxValue: 50, unit: '℃', onExpand: () => { this.openTrend(0); } })
             Divider().color(AppTheme.border)
-            HistoryChart({ title: '空气湿度', values: this.humiHistory, color: '#3D8D9C', minValue: 0, maxValue: 100, unit: '%' })
+            HistoryChart({ title: '空气湿度', samples: this.humiHistory, color: '#3D8D9C', minValue: 0, maxValue: 100, unit: '%', onExpand: () => { this.openTrend(1); } })
+            Text('仅记录本机已获取的有效上报，横轴为上报时间。')
+              .fontSize(11).fontColor(AppTheme.muted).width('100%')
           }
           .width('100%').padding(18).backgroundColor(AppTheme.surface)
           .border({ width: 1, color: AppTheme.border }).borderRadius(22)
@@ -728,6 +721,7 @@ export struct DeviceDetail {
       .backgroundColor(AppTheme.background)
     }
     .backgroundColor(AppTheme.background)
+    .bindContentCover($$this.trendExpanded, this.expandedTrendView(), { modalTransition: ModalTransition.DEFAULT })
     .title('设备详情')
     .onBackPressed(() => {
       this.navPathStack.pop(this.buildResult());
@@ -746,6 +740,11 @@ export struct DeviceDetail {
         this.properties = param.properties;
         this.lastSyncTime = param.lastSyncTime;
         this.lastOnlineTime = param.lastOnlineTime;
+        this.lastReportTime = 0;
+        for (let i: number = 0; i < param.properties.length; i++) {
+          const reportTime = param.properties[i].time;
+          if (reportTime !== undefined && Number.isFinite(reportTime) && reportTime > this.lastReportTime) { this.lastReportTime = reportTime; }
+        }
 
         const led = PropertyHelper.getValue(param.properties, 'led');
         if (led !== '') {
