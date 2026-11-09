@@ -520,6 +520,11 @@
           <GroupName>modules/app</GroupName>
           <Files>
             <File>
+              <FileName>app_commands.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\modules\app\src\app_commands.c</FilePath>
+            </File>
+            <File>
               <FileName>app_sensors.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\modules\app\src\app_sensors.c</FilePath>
@@ -539,6 +544,11 @@
         <Group>
           <GroupName>modules/middleware</GroupName>
           <Files>
+            <File>
+              <FileName>mw_command.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\modules\middleware\src\mw_command.c</FilePath>
+            </File>
             <File>
               <FileName>mw_config.c</FileName>
               <FileType>1</FileType>
@@ -659,6 +669,11 @@
         <Group>
           <GroupName>onenet</GroupName>
           <Files>
+            <File>
+              <FileName>onenet_command.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\onenet\onenet\src\onenet_command.c</FilePath>
+            </File>
             <File>
               <FileName>cJSON.c</FileName>
               <FileType>1</FileType>

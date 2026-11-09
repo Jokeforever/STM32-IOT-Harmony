@@ -98,18 +98,24 @@ static const char *parse_number(cJSON *item,const char *num)
 	double n=0,sign=1,scale=0;int subscale=0,signsubscale=1;
 
 	if (*num=='-') sign=-1,num++;	/* Has sign? */
-	if (*num=='0') num++;			/* is zero */
+    if (*num < '0' || *num > '9') return 0; /* JSON数字至少一位 */
+	if (*num=='0') { ++num; if (*num >= '0' && *num <= '9') return 0; }			/* is zero */
 	if (*num>='1' && *num<='9')	do	n=(n*10.0)+(*num++ -'0');	while (*num>='0' && *num<='9');	/* Number? */
 	if (*num=='.' && num[1]>='0' && num[1]<='9') {num++;		do	n=(n*10.0)+(*num++ -'0'),scale--; while (*num>='0' && *num<='9');}	/* Fractional part? */
 	if (*num=='e' || *num=='E')		/* Exponent? */
 	{	num++;if (*num=='+') num++;	else if (*num=='-') signsubscale=-1,num++;		/* With sign? */
-		while (*num>='0' && *num<='9') subscale=(subscale*10)+(*num++ - '0');	/* Number? */
+        if (*num < '0' || *num > '9') return 0; /* 指数符号后必须有数字 */
+		while (*num>='0' && *num<='9') { if (subscale < 10000) subscale=(subscale*10)+(*num - '0'); ++num; }	/* Number? */
 	}
 
 	n=sign*n*pow(10.0,(scale+subscale*signsubscale));	/* number = +/- number.fraction * 10^+/- exponent */
 	
 	item->valuedouble=n;
-	item->valueint=(int)n;
+	/* 旧解析器先转换valueint；饱和处理避免大数/NaN在命令校验前触发未定义转换。 */
+    if (n != n) item->valueint=0;
+    else if (n >= INT_MAX) item->valueint=INT_MAX;
+    else if (n <= INT_MIN) item->valueint=INT_MIN;
+    else item->valueint=(int)n;
 	item->type=cJSON_Number;
 	return num;
 }

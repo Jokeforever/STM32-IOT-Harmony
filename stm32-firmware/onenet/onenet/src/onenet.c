@@ -41,8 +41,8 @@
 
 //协议文件
 #include "onenet.h"
+#include "onenet_command.h"
 #include "mqttkit.h"
-#include "cJSON.h"
 
 //算法
 #include "base64.h"
@@ -52,9 +52,6 @@
 #include "usart.h"
 #include "myusart.h"
 //#include "sht20.h"
-#include "LED.h"
-#include "bump.h"
-#include "mw_config.h"
 #include "oled.h"
 #include "delay.h"
 //C库
@@ -711,14 +708,12 @@ void OneNet_RevPro(unsigned char *cmd)
 //	char numBuf[10];
 //	int num = 0;
 	
-	cJSON *raw_json,*params_json,*led_json,*bump_json,*id_json;
-	cJSON *co2_th_json,*drought_json,*moist_json,*temp_th_json;
-	char msg_id[64] = "0";
-	char reply_topic[80];
+	const char *reply_topic = "$sys/" PROID "/" DEVICE_NAME "/thing/property/set_reply";
+	const char *expected_topic = "$sys/" PROID "/" DEVICE_NAME "/thing/property/set";
 	char reply_payload[160];
 	char topic_buf[80];
 	char payload_buf[256];
-	
+
 	type = MQTT_UnPacketRecv(cmd);
 	switch(type)
 	{
@@ -727,105 +722,18 @@ void OneNet_RevPro(unsigned char *cmd)
 			result = MQTT_UnPacketPublish(cmd, &cmdid_topic, &topic_len, &req_payload, &req_len, &qos, &pkt_id);
 			if(result == 0 && cmdid_topic != NULL && req_payload != NULL)
 			{
-				unsigned short topic_copy_len = topic_len;
-				unsigned short payload_copy_len = req_len;
-
-				if(topic_copy_len >= sizeof(topic_buf))
-				{
-					topic_copy_len = sizeof(topic_buf) - 1;
-				}
-				memcpy(topic_buf, cmdid_topic, topic_copy_len);
-				topic_buf[topic_copy_len] = '\0';
-
-				if(payload_copy_len >= sizeof(payload_buf))
-				{
-					payload_copy_len = sizeof(payload_buf) - 1;
-				}
-				memcpy(payload_buf, req_payload, payload_copy_len);
-				payload_buf[payload_copy_len] = '\0';
-
-				if(strstr(topic_buf, "/thing/property/set") != NULL)
-				{
-					raw_json = cJSON_Parse(payload_buf);
-					if(raw_json != NULL)
-					{
-						id_json = cJSON_GetObjectItem(raw_json, "id");
-						if(id_json != NULL && id_json->valuestring != NULL)
-						{
-							snprintf(msg_id, sizeof(msg_id), "%s", id_json->valuestring);
-
-							params_json = cJSON_GetObjectItem(raw_json, "params");
-							if(params_json != NULL)
-							{
-								led_json = cJSON_GetObjectItem(params_json, "led");
-								bump_json = cJSON_GetObjectItem(params_json, "bump");
-
-								if(led_json != NULL && led_json->type == cJSON_Number)
-								{
-									int mode_value = led_json->valueint;
-									if(mode_value == 0)
-									{
-										LED_Set(LED_OFF);
-										Mode_Switch();
-									}
-									else if(mode_value == 1)
-									{
-										LED_Set(LED_ON);
-										Mode_Switch();
-									}
-									else if(mode_value == 2)
-									{
-										LED_Set(LED_AUTO);
-										Mode_Switch();
-									}
-								}
-
-								if(bump_json != NULL && bump_json->type == cJSON_Number)
-								{
-									int bump_value = bump_json->valueint;
-									if(bump_value >= 0 && bump_value <= 2)
-									{
-										Bump_Set(bump_value);
-									}
-								}
-
-								co2_th_json = cJSON_GetObjectItem(params_json, "CO2threhold");
-								drought_json = cJSON_GetObjectItem(params_json, "droughtthrehold");
-								moist_json = cJSON_GetObjectItem(params_json, "moistthrehold");
-								temp_th_json = cJSON_GetObjectItem(params_json, "tempthrehold");
-
-                                if (co2_th_json != NULL && co2_th_json->type == cJSON_Number)
-                                {
-                                    (void)AppConfig_Set(APP_CFG_CO2_THRESHOLD, co2_th_json->valueint);
-                                }
-
-                                if (drought_json != NULL && drought_json->type == cJSON_Number)
-                                {
-                                    (void)AppConfig_Set(APP_CFG_SOIL_LOW, drought_json->valueint);
-                                }
-
-                                if (moist_json != NULL && moist_json->type == cJSON_Number)
-                                {
-                                    (void)AppConfig_Set(APP_CFG_SOIL_HIGH, moist_json->valueint);
-                                }
-
-                                if (temp_th_json != NULL && temp_th_json->type == cJSON_Number)
-                                {
-                                    (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD, temp_th_json->valueint);
-                                }
-								snprintf(reply_topic, sizeof(reply_topic),
-									"$sys/%s/%s/thing/property/set_reply",
-									PROID, DEVICE_NAME);
-								snprintf(reply_payload, sizeof(reply_payload),
-									"{\"id\":\"%s\",\"code\":200,\"msg\":\"success\"}",
-									msg_id);
-								OneNET_Publish(reply_topic, reply_payload);
-							}
-						}
-
-						cJSON_Delete(raw_json);
-					}
-				}
+                /* 拒绝超长完整帧，不把截断JSON当成控制命令。 */
+                if (topic_len < sizeof(topic_buf) && req_len < sizeof(payload_buf) &&
+                    memchr(cmdid_topic, '\0', topic_len) == NULL && memchr(req_payload, '\0', req_len) == NULL)
+                {
+                    memcpy(topic_buf, cmdid_topic, topic_len); topic_buf[topic_len] = '\0';
+                    memcpy(payload_buf, req_payload, req_len); payload_buf[req_len] = '\0';
+                    if (strcmp(topic_buf, expected_topic) == 0 &&
+                        OneNetCommand_Handle(payload_buf, reply_payload, sizeof(reply_payload)))
+                    {
+                        OneNET_Publish(reply_topic, reply_payload);
+                    }
+                }
 			}
 			break;
 case MQTT_PKT_PUBACK:														

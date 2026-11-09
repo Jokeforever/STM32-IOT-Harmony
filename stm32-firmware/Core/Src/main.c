@@ -49,6 +49,7 @@
 //中间件层
 #include "mw_config.h"
 #include "app_sensors.h"
+#include "app_commands.h"
 
 //硬件驱动
 #include "myusart.h"
@@ -159,6 +160,7 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 	uint32_t last_upload_tick = 0;
+	uint32_t last_report_attempt_tick = 0;
 	uint32_t last_reconnect_tick = 0;
 	uint32_t last_led_control_tick = 0;
 	unsigned char *dataPtr = NULL;
@@ -237,16 +239,15 @@ int main(void)
 			}
 		}
 
-		uint32_t now_tick = HAL_GetTick();
-		if((now_tick - last_upload_tick) >= ONENET_UPLOAD_INTERVAL)	//发送间隔5s
-		{
-			last_upload_tick = now_tick;
+        uint32_t now_tick = HAL_GetTick();
+        uint8_t periodic_report_due = (uint8_t)((uint32_t)(now_tick - last_upload_tick) >= ONENET_UPLOAD_INTERVAL);
+        if (periodic_report_due)
+        {
+            last_upload_tick = now_tick;
             SensorService_Poll();
-			OneNet_SendData();									//发送数据
-		
-			ESP8266_Clear();
-		}
-				
+        }
+        /* 命令先处理，输出业务更新后再上报；事件上报不推迟5秒采集时钟。 */
+
 				dataPtr = ESP8266_GetIPD(0);
 				if(dataPtr != NULL)
 				OneNet_RevPro(dataPtr);
@@ -255,6 +256,13 @@ int main(void)
 				Monitor_Temp();
 				LED_Func();
 				IS_Normal();
+                now_tick = HAL_GetTick();
+                if (periodic_report_due || AppCommands_ReportDue(now_tick, last_report_attempt_tick, OneNet_IsConnected()))
+                {
+                    last_report_attempt_tick = now_tick;
+                    if (OneNet_SendData() == 0) AppCommands_ReportSent(); /* 现有接口：0成功，1失败。 */
+                    ESP8266_Clear();
+                }
 				Display_Data();
 
 				delay_ms(10);

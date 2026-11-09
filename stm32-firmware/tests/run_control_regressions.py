@@ -93,6 +93,8 @@ typedef enum { DISPLAY_NONE=0, DISPLAY_SCREEN1, DISPLAY_SCREEN2, DISPLAY_SCREEN3
 #endif
 ''')
 header('mw_config.h', read('modules/middleware/inc/mw_config.h'))
+header('mw_command.h', read('modules/middleware/inc/mw_command.h'))
+header('app_commands.h', read('modules/app/inc/app_commands.h'))
 header('mw_config_port.h', read('modules/middleware/inc/mw_config_port.h'))
 header('i2c.h', '''#include "stm32f1xx_hal.h"
 #define EEPROM_24C02_SIZE 256U
@@ -100,7 +102,7 @@ uint8_t EEPROM24C02_Read(uint8_t addr, uint8_t *buf, uint16_t len);
 uint8_t EEPROM24C02_Write(uint8_t addr, const uint8_t *buf, uint16_t len);
 ''')
 header('math.h', 'static inline float fabsf(float x) { return x < 0 ? -x : x; }\n')
-header('string.h', '#include <stddef.h>\nvoid *memset(void *p, int c, size_t n);\n')
+header('string.h', '#include <stddef.h>\nvoid *memset(void *p, int c, size_t n);\nint strcmp(const char *a,const char *b);\n')
 
 harness = r'''
 #include "stm32f1xx_hal.h"
@@ -182,74 +184,14 @@ static void pid(float kp,float ki,float kd,uint32_t start,int error) {
     LED_Update((int16_t)(200-error));
 }
 
-typedef struct {int type;int valueint;} cJSON;
-#define cJSON_Number 3
-static const char *cloud_name;
-static cJSON cloud_number;
-static int same_text(const char *a,const char *b) {while(*a&&*b&&*a==*b){a++;b++;}return *a==*b;}
-static cJSON *cJSON_GetObjectItem(cJSON *unused,const char *key) {(void)unused;return same_text(cloud_name,key)?&cloud_number:0;}
-static void cloud_dispatch(cJSON *params_json)
-{
-    cJSON *led_json,*bump_json,*co2_th_json,*drought_json,*moist_json,*temp_th_json;
-led_json = cJSON_GetObjectItem(params_json, "led");
-								bump_json = cJSON_GetObjectItem(params_json, "bump");
-
-								if(led_json != NULL && led_json->type == cJSON_Number)
-								{
-									int mode_value = led_json->valueint;
-									if(mode_value == 0)
-									{
-										LED_Set(LED_OFF);
-										Mode_Switch();
-									}
-									else if(mode_value == 1)
-									{
-										LED_Set(LED_ON);
-										Mode_Switch();
-									}
-									else if(mode_value == 2)
-									{
-										LED_Set(LED_AUTO);
-										Mode_Switch();
-									}
-								}
-
-								if(bump_json != NULL && bump_json->type == cJSON_Number)
-								{
-									int bump_value = bump_json->valueint;
-									if(bump_value >= 0 && bump_value <= 2)
-									{
-										Bump_Set(bump_value);
-									}
-								}
-
-								co2_th_json = cJSON_GetObjectItem(params_json, "CO2threhold");
-								drought_json = cJSON_GetObjectItem(params_json, "droughtthrehold");
-								moist_json = cJSON_GetObjectItem(params_json, "moistthrehold");
-								temp_th_json = cJSON_GetObjectItem(params_json, "tempthrehold");
-
-                                if (co2_th_json != NULL && co2_th_json->type == cJSON_Number)
-                                {
-                                    (void)AppConfig_Set(APP_CFG_CO2_THRESHOLD, co2_th_json->valueint);
-                                }
-
-                                if (drought_json != NULL && drought_json->type == cJSON_Number)
-                                {
-                                    (void)AppConfig_Set(APP_CFG_SOIL_LOW, drought_json->valueint);
-                                }
-
-                                if (moist_json != NULL && moist_json->type == cJSON_Number)
-                                {
-                                    (void)AppConfig_Set(APP_CFG_SOIL_HIGH, moist_json->valueint);
-                                }
-
-                                if (temp_th_json != NULL && temp_th_json->type == cJSON_Number)
-                                {
-                                    (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD, temp_th_json->valueint);
-                                }
-
+/* 调用新的生产命令入口；完整JSON解析另由命令回归覆盖。 */
+#include "app_commands.h"
+int strcmp(const char *a,const char *b) {while(*a && *b && *a==*b){a++;b++;}return (unsigned char)*a-(unsigned char)*b;}
+static void cloud_set(const char *name,int value) {
+    CommandEntry command;
+    command.key=Command_FindKey(name);command.value=value;
+    (void)AppCommands_Execute(&command,1);
 }
-static void cloud_set(const char *name,int value) {cJSON object;cloud_name=name;cloud_number.type=cJSON_Number;cloud_number.valueint=value;cloud_dispatch(&object);}
 
 int main(void) {
     AppConfig_Init();
@@ -509,7 +451,7 @@ int main(void) {
     cloud_set("CO2threhold",5000);CHECK(CO2_Threhold==375);
     cloud_set("droughtthrehold",35);CHECK(AppConfig_Get()->soil_low==35);
     cloud_set("moistthrehold",80);CHECK(AppConfig_Get()->soil_high==80);
-    cloud_set("droughtthrehold",90);CHECK(AppConfig_Get()->soil_low==80);
+    cloud_set("droughtthrehold",90);CHECK(AppConfig_Get()->soil_low==35); /* 云端交叉范围现在拒绝，保留原35。 */
     cloud_set("led",1);CHECK(AppConfig_Get()->led_mode==1);
     cloud_set("led",99);CHECK(AppConfig_Get()->led_mode==1);
     cloud_set("bump",2);CHECK(AppConfig_Get()->bump_mode==2);
@@ -555,7 +497,7 @@ int main(void) {
 expected_assertions=harness.count('CHECK(')-1+47
 harness=harness.replace('EXPECTED_ASSERTIONS',str(expected_assertions))
 (OUT / 'test.c').write_text(harness, encoding='utf-8')
-source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c']
+source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c']
 sources = []
 for rel in source_rel:
     p = OUT / Path(rel).name

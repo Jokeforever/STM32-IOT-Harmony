@@ -20,8 +20,8 @@ python tests/run_control_regressions.py
 - 配置接口测试：1000次新旧读写/时钟轨迹对比，覆盖延时、重试和回绕；真实适配的范围和转发检查包含在控制回归内。
 - PID独立测试：实际mw_pid与冻结的拆分前函数比较，4096步差分和独立边界向量，36925项断言。
 - 采集测试：实际 app_sensors/mw_filter 与冻结的重构前采集逻辑比较，1000组输入、9030项断言。
-- 控制测试：实际 mw_pid/LED/jdq/beep/bump/Key/app_config/mw_config，313项断言，覆盖通风仲裁、PID、14类参数边界、按键、云端属性分发片段、旧EEPROM二进制兼容与失败恢复、模式保存和中断完成。
-- 新配置测试执行实际app_config/LED/jdq/beep/bump/Key/mw_config代码。云端分发使用模拟JSON对象，未覆盖真实MQTT网络。
+- 控制测试：实际 mw_pid/LED/jdq/beep/bump/Key/app_config/mw_config，313项断言，覆盖通风仲裁、PID、14类参数边界、按键、命令业务入口、旧EEPROM二进制兼容与失败恢复、模式保存和中断完成。
+- 新配置测试执行实际app_config/LED/jdq/beep/bump/Key/mw_config代码。云端入口调用生产AppCommands；真实JSON与分发函数由新增命令测试覆盖，未覆盖真实MQTT网络。
 - 这些不是HIL，也不意味着真实硬件全部通过或取得完整代码覆盖率。
 
 最新目标工程编译与本轮实测清单见 `docs/2026-11-07-Config-Port.md`，2026-11-08用户五项检查通过。
@@ -33,3 +33,14 @@ PID分离历史验收见 `docs/2026-11-07-PID-Separation.md`。
 PID对照函数位于tests/fixtures/pid_before_extract.c，仅用于主机测试，不加入目标工程。
 
 配置接口对照函数位于tests/fixtures/config_before_port.c，仅主机测试使用，不加入目标固件。
+
+## 2026-11-09 命令处理回归
+
+```powershell
+python tests/run_command_regressions.py
+```
+
+1128项生产命令、业务适配、真实cJSON/OneJSON、提取MQTT分发及真实发送函数/主循环上报联动检查。编译器仍使用DevEco SDK Clang；新测试通过--windows-sdk定位本机Windows SDK的ucrt与kernel32导入库（默认自动选取已安装版本），不安装新依赖。
+支持--firmware-root/--overlay/--clang。网络、GPIO输出边界与时钟模拟；真实JSON解析与分配失败清理不是手工伪JSON树。不是HIL，不连接OneNET，不使用或输出真实密钥。
+原控制313项改为调用生产AppCommands入口；云端土壤冲突改为拒绝并保留原值，相应预期已更新。本机AppConfig和按键钳制规则未改。
+旧cJSON畸形数字先由新增用例复现，再修正语法/大数转换；完整结果与五项烧录清单见docs/2026-11-09-Command-Service.md。用户五项验收通过后已同步仓库脱敏副本；用户已授权本轮提交上传。
