@@ -13,15 +13,16 @@
  *   自动模式每 1 秒读取一次光照并执行一次 PID。
  *   默认 Ki=0、Kd=0，保持原有 P 控制效果，后续再调参。
  */
-//单片机头文件
-#include "stm32f1xx_hal.h"
+// PWM与时基通过端口访问，显示适配仍保留原OLED实现。
+#include "mw_led_port.h"
 
 //硬件驱动
 #include "LED.h"
+#include "oled.h"
 
 
 
-extern TIM_HandleTypeDef htim3;
+
 
  LED_Control led_ctrl = {0};
  uint16_t ccr = 0;
@@ -45,7 +46,7 @@ void LED_Init(void)
 
 void LED_PID_Reset(void)
 {
-    PID_Reset(&led_ctrl.pid, HAL_GetTick());
+    PID_Reset(&led_ctrl.pid, LedPort_NowMs());
 }
 
 void LED_Update(int16_t current_lux)
@@ -66,15 +67,15 @@ void LED_Update(int16_t current_lux)
     config.nominal_period_ms = LED_CONTROL_INTERVAL_MS;
     config.max_gap_ms = LED_PID_MAX_GAP_MS;
 
-    if (PID_Update(&led_ctrl.pid, &config, current_lux, HAL_GetTick(), &output) == PID_OUTPUT_READY)
+    if (PID_Update(&led_ctrl.pid, &config, current_lux, LedPort_NowMs(), &output) == PID_OUTPUT_READY)
         LED_SetPWM((int16_t)output);
 }
 
 void LED_SetPWM(int16_t pwm) {
     if (pwm < 0) pwm = 0;
     if (pwm > PWM_MAX) pwm = PWM_MAX;
-    __HAL_TIM_SET_COMPARE(&PWM_TIMER, PWM_CHANNEL, pwm);
-    led_ctrl.pwm_value = pwm;
+    if (LedPort_SetDuty((uint16_t)pwm) == LED_PORT_OK)
+        led_ctrl.pwm_value = (uint16_t)pwm;
 }
 
 void Mode_Switch(void) 
@@ -84,16 +85,15 @@ void Mode_Switch(void)
     switch (AppConfig_Get()->led_mode) {
         case MODE_OFF:
             // 关闭LED
-            HAL_TIM_PWM_Stop(&PWM_TIMER, PWM_CHANNEL);
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);
+            LedPort_Disable();
             break;         
         case MODE_AUTO_PID:
             // 自动PID模式
-            HAL_TIM_PWM_Start(&PWM_TIMER, PWM_CHANNEL);
+            LedPort_Enable();
             break;
             
         case MODE_CALIBRATION:
-						HAL_TIM_PWM_Start(&PWM_TIMER, PWM_CHANNEL);
+						LedPort_Enable();
 
             break;
     }

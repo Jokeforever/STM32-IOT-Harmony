@@ -2,8 +2,8 @@
 #define _LED_H_
 
 
-#include "Key.h"
-#include "oled.h"
+#include <stdint.h>
+#include "mw_led_port.h"
 #include "mw_pid.h"
 
 
@@ -22,9 +22,7 @@ void LED_Set(int mode);
 #define LDR_THREHOLD_HIGH 1000
 #define LDR_THREHOLD_LOW  100
 
-#define PWM_TIMER    htim3
-#define PWM_CHANNEL     TIM_CHANNEL_2
-#define PWM_MAX        1000  /* 对应100%占空比 */
+#define PWM_MAX ((int)LED_PORT_DUTY_SCALE) /* 归一化千分比，保持有符号限幅比较 */
 #define LED_DEFAULT_TARGET_LUX 200
 #define LED_CONTROL_INTERVAL_MS 1000U
 #define LED_PID_MAX_GAP_MS (5U * LED_CONTROL_INTERVAL_MS)
@@ -50,20 +48,6 @@ typedef enum {
     MODE_CALIBRATION = 1,   // 标准模式
     MODE_AUTO_PID = 2, // 自动PID模式
 } System_Mode;
-
-
-
-//// PWM参数
-//#define PWM_TIMER       htim3
-//#define PWM_CHANNEL     TIM_CHANNEL_2
-//#define PWM_PERIOD      999  // ARR值，决定PWM频率
-//#define PWM_MAX_DUTY    100.0f // 最大占空比(%)
-//#define PWM_MIN_DUTY    0.0f   // 最小占空比(%)
-
-//// 光强测量
-//#define LIGHT_MIN_LUX   0
-//#define LIGHT_MAX_LUX   1000
-//#define TARGET_LUX      500  // 目标光照强度
 
 
 

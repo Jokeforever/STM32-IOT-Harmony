@@ -1,6 +1,7 @@
 #include "app_config.h"
 #include "app_sensors.h"
 #include "beep.h"
+#include "Display.h" /* 显式依赖显示枚举，不再经LED.h间接获取。 */
 
 
 

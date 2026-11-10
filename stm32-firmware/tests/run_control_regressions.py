@@ -59,6 +59,7 @@ void HAL_TIM_PWM_Start(TIM_HandleTypeDef *h, int channel);
 void HAL_TIM_PWM_Stop(TIM_HandleTypeDef *h, int channel);
 void mock_compare(unsigned value);
 #define __HAL_TIM_SET_COMPARE(h, c, v) mock_compare(v)
+#define __HAL_TIM_GET_AUTORELOAD(h) 999U
 #endif
 ''')
 for name in ('main.h', 'fan.h', 'jdq.h', 'beep.h'):
@@ -67,7 +68,10 @@ header('sensor_data.h', read('modules/middleware/inc/sensor_data.h'))
 header('app_sensors.h', read('modules/app/inc/app_sensors.h'))
 header('app_config.h', read('modules/app/inc/app_config.h'))
 header('mw_pid.h', read('modules/middleware/inc/mw_pid.h'))
-header('LED.h', read('Core/Inc/LED.h').replace('#include "Key.h"', '#include "Key.h"\n#include "stm32f1xx_hal.h"'))
+header('LED.h', read('Core/Inc/LED.h'))
+header('mw_led_port.h', read('modules/middleware/inc/mw_led_port.h'))
+header('tim.h', '#include \"stm32f1xx_hal.h\"\n')
+header('gpio.h', '#include \"stm32f1xx_hal.h\"\n')
 header('Key.h', '#ifndef MOCK_KEY_H\n#define MOCK_KEY_H\n#include "stm32f1xx_hal.h"\ntypedef struct { uint8_t State, Pin_state, ClickFlag, LongClickFlag; uint32_t Presstime, Releasetime; } Key;\n#define LDR_STEP 100\n#define CO2_STEP 100\n#define TEMP_STEP 2\n#define BUMP_STEP 2\nvoid Key_Func(void);\n#include "LED.h"\n#include "bump.h"\n#endif\n')
 header('oled.h', '#ifndef MOCK_OLED_H\n#define MOCK_OLED_H\nvoid OLED_Clear(void);\nvoid Display1_Init(void);\nvoid Display2_Init(void);\nvoid Display3_Init(void);\nvoid Display4_Init(void);\nvoid Display5_Init(void);\nvoid OLED_ShowCHinese(int x, int y, int symbol);\n#endif\n')
 header('usart3.h', '#include <stdint.h>\n#define CO2_THREHOLD 2000\n')
@@ -92,6 +96,7 @@ typedef enum { DISPLAY_NONE=0, DISPLAY_SCREEN1, DISPLAY_SCREEN2, DISPLAY_SCREEN3
 #define BUMP_OFF HAL_GPIO_WritePin(GPIOB,GPIO_PIN_1,GPIO_PIN_RESET)
 #endif
 ''')
+header('Display.h', '#include \"bump.h\"\n')
 header('mw_config.h', read('modules/middleware/inc/mw_config.h'))
 header('mw_command.h', read('modules/middleware/inc/mw_command.h'))
 header('app_commands.h', read('modules/app/inc/app_commands.h'))
@@ -108,6 +113,7 @@ harness = r'''
 #include "stm32f1xx_hal.h"
 #include "main.h"
 #include "LED.h"
+#include "Key.h"
 #include "bump.h"
 #include "jdq.h"
 #include "beep.h"
@@ -497,7 +503,7 @@ int main(void) {
 expected_assertions=harness.count('CHECK(')-1+47
 harness=harness.replace('EXPECTED_ASSERTIONS',str(expected_assertions))
 (OUT / 'test.c').write_text(harness, encoding='utf-8')
-source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c']
+source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c']
 sources = []
 for rel in source_rel:
     p = OUT / Path(rel).name

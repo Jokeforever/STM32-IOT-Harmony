@@ -1,5 +1,13 @@
 # STM32-IOT-Harmony
 
+## 2026-11-10 LED运行期端口（五项验收通过并归档）
+
+真实工程新增mw_led_port.h与app_led_port.c，将LED运行期PWM、启停/关灯和毫秒时基收拢；公共LED.h不再包含HAL/Key/OLED。LED_Display仍保留原OLED实现，不宣称整个LED模块已完全独立。
+统一0～1000千分比占空比，当前ARR=999时输出与旧实现一致；PID、模式、配置和定时器初始化保持原规则。补beep.c对Display.h的直接依赖，报警逻辑不变。
+LED端口123616项断言/4096步对照、原控制313、命令1128、PID36925、采集9030和配置1000次轨迹通过；真实Keil完整编译0错误5条既有cJSON警告，Code=50082、RO=6614、RW=208、ZI=7952。
+用户于2026-11-10明确确认本轮五项实物检查均通过。确认后同步已验证源码、Keil条目、回归与说明至仓库脱敏副本，更新文档并按约定提交上传；App源码及真实联网配置保留。泵/风扇/继电器实体负载仍暂缓。详见docs/15。
+
+
 STM32 + ESP8266 + OneNET + HarmonyOS 的单节点环境监测与控制项目。
 
 ```text
@@ -115,6 +123,7 @@ App 首页版本标记仍为 v13，STM32 配置格式仍为 v2；本轮未调整
 - [App上报趋势、缓存与五项实测](docs/12-App-Report-Trends.md)
 - [控制应答与上报确认](docs/13-App-Control-Confirmation.md)
 - [真实工程命令处理层与本轮验收](docs/14-STM32-Command-Service.md)
+- [LED端口与本轮五项验收](docs/15-LED-Port.md)
 - [更新日志](CHANGELOG.md)
 
 ## 修改、验证与同步约定
