@@ -33,3 +33,7 @@ app-trend-regressions.cjs 读取实际 entry/src/main/ets/model/TrendHistory.ets
 ```
 
 可用--root指定App仓库根目录，--compiler指定SDK转译器。覆盖设备应答、上报匹配、期限、重复发送保护、旧回包、页面离开、关闭自动刷新与脉冲命令。联机和界面五项验收见docs/13。
+
+## 2026-11-10 温度上下限
+
+生产App支持tempthrehold通风上限和temp_low_threshold加热下限，沿用控制确认。控制回归现44场景168项，新增下限实际API参数、标签单位、配对冲突/缺项拒绝及下限新上报确认；趋势68场景127项保留。ArkTS编译通过3条既有服务警告，未生成HAP。用户已反馈原第1、2项及本机四项通过；风扇/加热器相关实测仍暂缓，第二参数页样式获免追加实测提交授权，见docs/21。

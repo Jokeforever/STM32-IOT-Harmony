@@ -5,6 +5,7 @@
 //extern   uint8_t Key1,Key2 ;
 extern float water_vol ;
 extern volatile DisplayScreen CurrentScreen;
+extern uint8_t Monitor_para1; /* 本机参数选择，仅用于绘制光标。 */
 extern volatile Abnormal abnormal[3];
 
 void Display1_Init(void)
@@ -58,16 +59,18 @@ void Display3_Init(void)
 
 void Display4_Init(void)
 {
-	OLED_ShowString(0,0,(uint8_t*)"LH;",16);
-	OLED_ShowString(0,3,(uint8_t*)"LL;",16);
-	OLED_ShowString(0,6,(uint8_t*)"TH;",16);
+    /* 16像素字体占两页，0/2/4/6恰好排满64像素，不增加屏幕页。 */
+    OLED_ShowString(12,0,(uint8_t*)"LL:",16);
+    OLED_ShowString(12,2,(uint8_t*)"LH:",16);
+    OLED_ShowString(12,4,(uint8_t*)"TH:",16);
+    OLED_ShowString(12,6,(uint8_t*)"TL:",16);
 }
 void Display5_Init(void)
 {
-	OLED_ShowString(0,0,(uint8_t*)"BH;",12);
-	OLED_ShowString(0,3,(uint8_t*)"BL;",12);
-	OLED_ShowString(0,6,(uint8_t*)"CO;",16);
-
+    /* 与参数页4统一：16像素字、每行两页、左侧光标。 */
+    OLED_ShowString(12,0,(uint8_t*)"BL:",16);
+    OLED_ShowString(12,2,(uint8_t*)"BH:",16);
+    OLED_ShowString(12,4,(uint8_t*)"CO:",16);
 }
 
 //数据刷新显示1，2
@@ -117,34 +120,34 @@ void Refresh3_Data(void)
 }
 void Refresh4_Data(void)
 {
-	char buf4[10];
-	
-	sprintf(buf4,"%d  ",AppConfig_Get()->ldr_low);
-	OLED_ShowString(48,0,(uint8_t*)buf4,16);  
-	
-	sprintf(buf4,"%d  ",AppConfig_Get()->ldr_high);
-	OLED_ShowString(48,3,(uint8_t*)buf4,16); 
-	
-	sprintf(buf4,"%d  ",AppConfig_Get()->temp_threshold);
-	OLED_ShowString(48,6,(uint8_t*)buf4,16);  
-	
-
+    const RuntimeConfig *config = AppConfig_Get();
+    char buf4[10];
+    OLED_ShowString(0,0,(uint8_t*)(Monitor_para1 == 0U ? ">" : " "),16);
+    sprintf(buf4,"%4u ",(unsigned)config->ldr_low);
+    OLED_ShowString(48,0,(uint8_t*)buf4,16);
+    OLED_ShowString(0,2,(uint8_t*)(Monitor_para1 == 1U ? ">" : " "),16);
+    sprintf(buf4,"%4u ",(unsigned)config->ldr_high);
+    OLED_ShowString(48,2,(uint8_t*)buf4,16);
+    OLED_ShowString(0,4,(uint8_t*)(Monitor_para1 == 2U ? ">" : " "),16);
+    sprintf(buf4,"%3uC ",(unsigned)config->temp_threshold);
+    OLED_ShowString(48,4,(uint8_t*)buf4,16);
+    OLED_ShowString(0,6,(uint8_t*)(Monitor_para1 == 6U ? ">" : " "),16);
+    sprintf(buf4,"%3uC ",(unsigned)config->temp_low_threshold);
+    OLED_ShowString(48,6,(uint8_t*)buf4,16);
 }
 void Refresh5_Data(void)
 {
-	
-	char buf5[10];
-	
-		sprintf(buf5,"%d  ",AppConfig_Get()->soil_low);
-	OLED_ShowString(48,0,(uint8_t*)buf5,16);  
-	
-	sprintf(buf5,"%d  ",AppConfig_Get()->soil_high);
-	OLED_ShowString(48,3,(uint8_t*)buf5,16); 
-
-	
-	sprintf(buf5,"%d  ",AppConfig_Get()->co2_threshold);
-	OLED_ShowString(48,6,(uint8_t*)buf5,16); 
-	
+    const RuntimeConfig *config = AppConfig_Get();
+    char buf5[10];
+    OLED_ShowString(0,0,(uint8_t*)(Monitor_para1 == 3U ? ">" : " "),16);
+    sprintf(buf5,"%3u%% ",(unsigned)config->soil_low);
+    OLED_ShowString(48,0,(uint8_t*)buf5,16);
+    OLED_ShowString(0,2,(uint8_t*)(Monitor_para1 == 4U ? ">" : " "),16);
+    sprintf(buf5,"%3u%% ",(unsigned)config->soil_high);
+    OLED_ShowString(48,2,(uint8_t*)buf5,16);
+    OLED_ShowString(0,4,(uint8_t*)(Monitor_para1 == 5U ? ">" : " "),16);
+    sprintf(buf5,"%4u ",(unsigned)config->co2_threshold);
+    OLED_ShowString(48,4,(uint8_t*)buf5,16);
 }
 
 char bufdat[20];

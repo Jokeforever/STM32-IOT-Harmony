@@ -11,7 +11,7 @@ typedef struct
     uint8_t led_mode;           /* 0关闭、1手动常亮、2自动 */
     volatile uint8_t bump_mode; /* 0关闭、1脉冲、2自动；仅该字段可被完成中断更新 */
     uint8_t led_manual_pwm;     /* 0..100 % */
-    uint8_t temp_threshold;     /* 0..100 摄氏度 */
+    uint8_t temp_threshold;     /* 通风上限1..100℃，大于加热下限 */
     uint16_t co2_threshold;     /* 350..4000 ppm */
     uint16_t ldr_low;           /* 0..9999 lux，不能超过ldr_high */
     uint16_t ldr_high;          /* 0..9999 lux，不能低于ldr_low */
@@ -22,6 +22,7 @@ typedef struct
     int32_t pid_kp_x1000;       /* 0..10000：系数乘1000保存 */
     int32_t pid_ki_x1000;
     int32_t pid_kd_x1000;
+    uint8_t temp_low_threshold; /* 加热下限0..99℃，小于通风上限 */
 } RuntimeConfig;
 
 typedef enum
@@ -40,6 +41,7 @@ typedef enum
     APP_CFG_PID_KP,
     APP_CFG_PID_KI,
     APP_CFG_PID_KD,
+    APP_CFG_TEMP_LOW_THRESHOLD,
     APP_CFG_COUNT
 } AppConfigKey;
 

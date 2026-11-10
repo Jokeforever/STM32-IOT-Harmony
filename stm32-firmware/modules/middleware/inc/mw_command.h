@@ -3,10 +3,10 @@
 #define MW_COMMAND_H
 #include <stdint.h>
 
-#define COMMAND_CAPACITY 6U
+#define COMMAND_CAPACITY 7U
 typedef enum {
     COMMAND_LED, COMMAND_PUMP, COMMAND_CO2, COMMAND_SOIL_LOW,
-    COMMAND_SOIL_HIGH, COMMAND_TEMP, COMMAND_KEY_COUNT
+    COMMAND_SOIL_HIGH, COMMAND_TEMP, COMMAND_TEMP_LOW, COMMAND_KEY_COUNT
 } CommandKey;
 typedef struct { CommandKey key; int32_t value; } CommandEntry;
 typedef struct { int32_t values[COMMAND_KEY_COUNT]; } CommandState;

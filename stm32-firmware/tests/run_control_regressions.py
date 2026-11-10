@@ -66,6 +66,7 @@ for name in ('main.h', 'fan.h', 'jdq.h', 'beep.h'):
     header(name, read('Core/Inc/' + name))
 header('sensor_data.h', read('modules/middleware/inc/sensor_data.h'))
 header('mw_alarm.h', read('modules/middleware/inc/mw_alarm.h'))
+header('mw_climate.h',read('modules/middleware/inc/mw_climate.h'))
 header('mw_alarm_port.h', read('modules/middleware/inc/mw_alarm_port.h'))
 header('app_sensors.h', read('modules/app/inc/app_sensors.h'))
 header('app_config.h', read('modules/app/inc/app_config.h'))
@@ -75,7 +76,7 @@ header('mw_led_port.h', read('modules/middleware/inc/mw_led_port.h'))
 header('mw_key_port.h', read('modules/middleware/inc/mw_key_port.h'))
 header('tim.h', '#include \"stm32f1xx_hal.h\"\n')
 header('gpio.h', '#include \"stm32f1xx_hal.h\"\n')
-header('Key.h', '#ifndef MOCK_KEY_H\n#define MOCK_KEY_H\n#include "stm32f1xx_hal.h"\ntypedef struct { uint8_t State, Pin_state, ClickFlag, LongClickFlag; uint32_t Presstime, Releasetime; } Key;\n#define LDR_STEP 100\n#define CO2_STEP 100\n#define TEMP_STEP 2\n#define BUMP_STEP 2\nvoid Key_Func(void);\n#include "LED.h"\n#include "bump.h"\n#endif\n')
+header('Key.h', '#ifndef MOCK_KEY_H\n#define MOCK_KEY_H\n#include "stm32f1xx_hal.h"\ntypedef struct { uint8_t State, Pin_state, ClickFlag, LongClickFlag; uint32_t Presstime, Releasetime; } Key;\n#define LDR_STEP 100\n#define CO2_STEP 100\n#define TEMP_STEP 1\n#define BUMP_STEP 2\nvoid Key_Func(void);\n#include "LED.h"\n#include "bump.h"\n#endif\n')
 header('oled.h', '#ifndef MOCK_OLED_H\n#define MOCK_OLED_H\nvoid OLED_Clear(void);\nvoid Display1_Init(void);\nvoid Display2_Init(void);\nvoid Display3_Init(void);\nvoid Display4_Init(void);\nvoid Display5_Init(void);\nvoid OLED_ShowCHinese(int x, int y, int symbol);\n#endif\n')
 header('usart3.h', '#include <stdint.h>\n#define CO2_THREHOLD 2000\n')
 header('bump.h', '''#ifndef MOCK_BUMP_H
@@ -110,7 +111,7 @@ uint8_t EEPROM24C02_Read(uint8_t addr, uint8_t *buf, uint16_t len);
 uint8_t EEPROM24C02_Write(uint8_t addr, const uint8_t *buf, uint16_t len);
 ''')
 header('math.h', 'static inline float fabsf(float x) { return x < 0 ? -x : x; }\n')
-header('string.h', '#include <stddef.h>\nvoid *memset(void *p, int c, size_t n);\nint strcmp(const char *a,const char *b);\n')
+header('string.h', '#include <stddef.h>\nvoid *memset(void *p, int c, size_t n);void *memcpy(void*,const void*,size_t);\nint strcmp(const char *a,const char *b);\n')
 
 harness = r'''
 #include "stm32f1xx_hal.h"
@@ -179,7 +180,7 @@ uint8_t EEPROM24C02_Write(uint8_t a,const uint8_t *b,uint16_t n) {
     unsigned i; write_calls++; if (fail_write || (unsigned)a+n>256) return 0; for(i=0;i<n;i++) eeprom[a+i]=b[i]; if(corrupt_write)eeprom[a]^=1; return 1;
 }
 static const uint8_t legacy_v2[] = {49,71,70,67,2,0,48,0,7,0,2,0,65,33,252,8,120,0,8,7,25,0,85,0,217,4,255,15,244,1,17,0,219,5,0,0,123,0,0,0,200,1,0,0,211,10,200,96};
-static const uint8_t legacy_v2_next[] = {49,71,70,67,2,0,48,0,8,0,2,0,65,33,252,8,120,0,8,7,25,0,85,0,217,4,255,15,244,1,17,0,219,5,0,0,123,0,0,0,200,1,0,0,148,152,216,76};
+static const uint8_t expected_v3_next[] = {49,71,70,67,3,0,52,0,8,0,2,0,65,30,252,8,120,0,8,7,25,0,85,0,217,4,255,15,244,1,17,0,219,5,0,0,123,0,0,0,200,1,0,0,20,0,0,0,185,227,201,211};
 static const uint8_t legacy_v1[] = {49,71,70,67,1,0,32,0,5,0,2,0,60,31,152,8,100,0,220,5,25,0,80,0,217,4,255,15,95,251,98,80};
 static const uint8_t legacy_invalid_values[] = {49,71,70,67,2,0,48,0,7,0,255,255,255,255,136,19,208,7,100,0,90,0,20,0,217,4,255,15,255,255,201,0,255,255,255,255,17,39,0,0,255,255,255,255,6,123,49,18};
 static unsigned assertions;
@@ -210,27 +211,57 @@ int main(void) {
     CHECK(pins[GPIOB][5]==GPIO_PIN_RESET); CHECK(pins[GPIOB][6]==GPIO_PIN_SET);
     temp=25;ppm=2500;Monitor_Temp();IS_Normal();CHECK(pins[GPIOB][5]==GPIO_PIN_RESET);
     temp=28;ppm=2500;Monitor_Temp();IS_Normal();CHECK(pins[GPIOB][5]==GPIO_PIN_RESET);
-    temp=25;ppm=350;Monitor_Temp();IS_Normal();CHECK(pins[GPIOB][5]==GPIO_PIN_SET);
-    temp=22;Monitor_Temp();CHECK(pins[GPIOB][6]==GPIO_PIN_RESET);
+    temp=24;ppm=350;Monitor_Temp();IS_Normal();CHECK(pins[GPIOB][5]==GPIO_PIN_SET);
+    temp=19;Monitor_Temp();CHECK(pins[GPIOB][6]==GPIO_PIN_RESET);
     temp=28;Monitor_Temp();CHECK(pins[GPIOB][6]==GPIO_PIN_SET);
-    temp=22;sensor_valid=0;Monitor_Temp();CHECK(pins[GPIOB][6]==GPIO_PIN_SET);
+    temp=19;sensor_valid=0;Monitor_Temp();CHECK(pins[GPIOB][6]==GPIO_PIN_SET);
     temp=28;ppm=2500;Monitor_Temp();IS_Normal();
     CHECK(pins[GPIOB][5]==GPIO_PIN_SET);CHECK(abnormal[2]==NONE);
     sensor_valid=SENSOR_VALID_CO2;Monitor_Temp();CHECK(pins[GPIOB][5]==GPIO_PIN_RESET);
-    sensor_valid=SENSOR_VALID_TEMP;ppm=350;temp=26;Monitor_Temp();CHECK(pins[GPIOB][5]==GPIO_PIN_SET);
+    sensor_valid=SENSOR_VALID_TEMP;ppm=350;temp=26;Monitor_Temp();CHECK(pins[GPIOB][5]==GPIO_PIN_RESET);
     temp=24;Monitor_Temp();CHECK(pins[GPIOB][6]==GPIO_PIN_SET);
-    (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,0);temp=0;Monitor_Temp();CHECK(pins[GPIOB][6]==GPIO_PIN_SET);
+    (void)AppConfig_Set(APP_CFG_TEMP_LOW_THRESHOLD,0);(void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,1);temp=0;Monitor_Temp();CHECK(pins[GPIOB][6]==GPIO_PIN_SET);
     (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,100);temp=100;Monitor_Temp();CHECK(pins[GPIOB][5]==GPIO_PIN_SET);
-    /* 实际按键函数：阈值0、1、2、正常值的下边界；实测温度不得被写入。 */
+    /* 实际按键：上限至少大于下限，饱和增减不改采样值。 */
     CurrentScreen=DISPLAY_SCREEN4;temp=25;
-    (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,0);Monitor_para1=2;Keys[3].ClickFlag=1;Key_Func();
-    CHECK(temp_threhold==0);CHECK(temp==25);
+    (void)AppConfig_Set(APP_CFG_TEMP_LOW_THRESHOLD,0);
     (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,1);Monitor_para1=2;Keys[3].ClickFlag=1;Key_Func();
-    CHECK(temp_threhold==0);CHECK(temp==25);
+    CHECK(temp_threhold==1);CHECK(temp==25);
     (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,2);Monitor_para1=2;Keys[3].ClickFlag=1;Key_Func();
-    CHECK(temp_threhold==0);CHECK(temp==25);
+    CHECK(temp_threhold==1);CHECK(temp==25);
     (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,25);Monitor_para1=2;Keys[3].ClickFlag=1;Key_Func();
-    CHECK(temp_threhold==23);CHECK(temp==25);
+    CHECK(temp_threhold==24);CHECK(temp==25);
+    /* 本机四项导航、每次1℃、保持选择和双阈值交叉保护。 */
+    AppConfig_Init();CurrentScreen=DISPLAY_SCREEN4;Monitor_para1=0;
+    Keys[1].ClickFlag=1;Key_Func();CHECK(Monitor_para1==1);
+    Keys[1].ClickFlag=1;Key_Func();CHECK(Monitor_para1==2);
+    Keys[1].ClickFlag=1;Key_Func();CHECK(Monitor_para1==6);
+    Keys[2].ClickFlag=1;Key_Func();CHECK(AppConfig_Get()->temp_low_threshold==21);CHECK(Monitor_para1==6);
+    Keys[2].ClickFlag=1;Key_Func();CHECK(AppConfig_Get()->temp_low_threshold==22);CHECK(Monitor_para1==6);
+    Keys[3].ClickFlag=1;Key_Func();CHECK(AppConfig_Get()->temp_low_threshold==21);CHECK(Monitor_para1==6);
+    Keys[1].ClickFlag=1;Key_Func();CHECK(Monitor_para1==0);
+    Monitor_para1=2;Keys[2].ClickFlag=1;Key_Func();CHECK(temp_threhold==31);CHECK(Monitor_para1==2);
+    (void)AppConfig_Set(APP_CFG_TEMP_LOW_THRESHOLD,30);Monitor_para1=6;
+    Keys[2].ClickFlag=1;Key_Func();CHECK(AppConfig_Get()->temp_low_threshold==30);CHECK(temp_threhold==31);
+    Monitor_para1=2;Keys[3].ClickFlag=1;Key_Func();CHECK(temp_threhold==31);
+    (void)AppConfig_Set(APP_CFG_TEMP_LOW_THRESHOLD,0);Monitor_para1=6;
+    Keys[3].ClickFlag=1;Key_Func();CHECK(AppConfig_Get()->temp_low_threshold==0);
+    (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,100);(void)AppConfig_Set(APP_CFG_TEMP_LOW_THRESHOLD,99);
+    Keys[2].ClickFlag=1;Key_Func();CHECK(AppConfig_Get()->temp_low_threshold==99);
+    Monitor_para1=2;Keys[2].ClickFlag=1;Key_Func();CHECK(temp_threhold==100);
+    CurrentScreen=DISPLAY_SCREEN4;Monitor_para1=6;Keys[0].ClickFlag=1;Key_Func();
+    CHECK(CurrentScreen==DISPLAY_SCREEN5);CHECK(Monitor_para1==3);
+    Keys[1].ClickFlag=1;Key_Func();CHECK(Monitor_para1==4);
+    Keys[1].ClickFlag=1;Key_Func();CHECK(Monitor_para1==5);
+    Keys[1].ClickFlag=1;Key_Func();CHECK(Monitor_para1==3);
+    CurrentScreen=DISPLAY_SCREEN3;Monitor_para1=5;Keys[0].ClickFlag=1;Key_Func();
+    CHECK(CurrentScreen==DISPLAY_SCREEN4);CHECK(Monitor_para1==0);
+    /* 真正通过按键改下限，再经生产v3存储与加载验证。 */
+    AppConfig_Init();memset(eeprom,255,sizeof(eeprom));Config_Load();Monitor_para1=6;
+    Keys[2].ClickFlag=1;Key_Func();CHECK(AppConfig_Get()->temp_low_threshold==21);CHECK(Config_IsDirty());
+    tick+=1000;Config_Process();CHECK(!Config_IsDirty());
+    AppConfig_Init();Config_Load();CHECK(AppConfig_Get()->temp_threshold==30);CHECK(AppConfig_Get()->temp_low_threshold==21);
+    AppConfig_Init();
     /* PID 积分必须使用实际 0.5/1/1.5 秒，而不是全部裁成 0.1 秒。 */
     pid(0,1,0,0,100);tick=1000;LED_Update(100);CHECK(near(led_ctrl.pid.integral,100));CHECK(pwm==100);
     pid(0,1,0,0,100);tick=500;LED_Update(100);CHECK(near(led_ctrl.pid.integral,50));
@@ -249,24 +280,24 @@ int main(void) {
     (void)AppConfig_Set(APP_CFG_PID_TARGET,500);CHECK(Config_Save()!=0);(void)AppConfig_Set(APP_CFG_PID_TARGET,123);Config_Load();
     CHECK(AppConfig_Get()->pid_target_lux==500);
 
-    /* Runtime/storage are different structures; persisted v2 offsets must remain frozen. */
-    CHECK(sizeof(DeviceConfig)==48);CHECK(offsetof(DeviceConfig,crc32)==44);
-    /* Read an independently packed old v2 record, then save byte-identical values to the other slot. */
+    /* Runtime/storage are different structures; v3 storage offsets are checked; v1/v2 records remain readable. */
+    CHECK(sizeof(DeviceConfig)==52);CHECK(offsetof(DeviceConfig,crc32)==48);
+    /* Read an independently packed old v2 record, then migrate to independently packed v3 bytes in the other slot. */
     memset(eeprom,255,sizeof(eeprom));memcpy(eeprom,legacy_v2,sizeof(legacy_v2));Config_Load();
-    CHECK(AppConfig_Get()->pid_target_lux==500);CHECK(AppConfig_Get()->temp_threshold==33);
+    CHECK(AppConfig_Get()->pid_target_lux==500);CHECK(AppConfig_Get()->temp_threshold==30);
     CHECK(AppConfig_Get()->co2_threshold==2300);CHECK(AppConfig_Get()->soil_low==25);CHECK(AppConfig_Get()->soil_high==85);
     CHECK(AppConfig_Get()->led_manual_pwm==65);CHECK(AppConfig_Get()->pid_kp_x1000==1499);
     CHECK(AppConfig_Get()->pid_ki_x1000==123);CHECK(AppConfig_Get()->pid_kd_x1000==456);
     CHECK(Config_Save()!=0);
-    {unsigned i;for(i=0;i<sizeof(legacy_v2_next);i++)CHECK(eeprom[64+i]==legacy_v2_next[i]);}
+    {unsigned i;for(i=0;i<sizeof(expected_v3_next);i++)CHECK(eeprom[64+i]==expected_v3_next[i]);}
     /* Failed write/readback/corrupted target do not destroy the previous valid record. */
-    (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,40);fail_write=1;CHECK(Config_Save()==0);fail_write=0;Config_Load();CHECK(temp_threhold==33);
+    (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,40);fail_write=1;CHECK(Config_Save()==0);fail_write=0;Config_Load();CHECK(temp_threhold==30);
     (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,40);fail_read=1;CHECK(Config_Save()==0);fail_read=0;
     /* Reload the known fixture before testing corruption: a readback failure may have written a valid slot. */
     memset(eeprom,255,sizeof(eeprom));memcpy(eeprom,legacy_v2,sizeof(legacy_v2));Config_Load();
-    (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,40);corrupt_write=1;CHECK(Config_Save()==0);corrupt_write=0;Config_Load();CHECK(temp_threhold==33);
+    (void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,40);corrupt_write=1;CHECK(Config_Save()==0);corrupt_write=0;Config_Load();CHECK(temp_threhold==30);
     memset(eeprom,255,sizeof(eeprom));memcpy(eeprom,legacy_v1,sizeof(legacy_v1));Config_Load();
-    CHECK(temp_threhold==31);CHECK(AppConfig_Get()->pid_target_lux==200);CHECK(AppConfig_Get()->pid_kp_x1000==1500);
+    CHECK(temp_threhold==30);CHECK(AppConfig_Get()->pid_target_lux==200);CHECK(AppConfig_Get()->pid_kp_x1000==1500);
     CHECK(Config_IsDirty()!=0);tick+=1000;Config_Process();CHECK(Config_IsDirty()==0);
     /* Direct setters (used by cloud) reject invalid scalars; key adjustments saturate. */
     CHECK(AppConfig_Set(APP_CFG_TEMP_THRESHOLD,-1)==APP_CONFIG_REJECTED);
@@ -348,9 +379,10 @@ int main(void) {
     (void)AppConfig_Set(APP_CFG_SOIL_LOW,0);(void)AppConfig_Set(APP_CFG_SOIL_HIGH,100);
     CHECK(AppConfig_Set(APP_CFG_TEMP_THRESHOLD,-1)==APP_CONFIG_REJECTED);
     CHECK(AppConfig_Set(APP_CFG_TEMP_THRESHOLD,101)==APP_CONFIG_REJECTED);
-    CHECK(AppConfig_Set(APP_CFG_TEMP_THRESHOLD,0)!=APP_CONFIG_REJECTED);CHECK(AppConfig_Get()->temp_threshold==0);
+    (void)AppConfig_Set(APP_CFG_TEMP_LOW_THRESHOLD,0);
+    CHECK(AppConfig_Set(APP_CFG_TEMP_THRESHOLD,1)!=APP_CONFIG_REJECTED);CHECK(AppConfig_Get()->temp_threshold==1);
     CHECK(AppConfig_Set(APP_CFG_TEMP_THRESHOLD,100)!=APP_CONFIG_REJECTED);CHECK(AppConfig_Get()->temp_threshold==100);
-    (void)AppConfig_Adjust(APP_CFG_TEMP_THRESHOLD,(-2147483647-1));CHECK(AppConfig_Get()->temp_threshold==0);
+    (void)AppConfig_Adjust(APP_CFG_TEMP_THRESHOLD,(-2147483647-1));CHECK(AppConfig_Get()->temp_threshold==1);
     (void)AppConfig_Adjust(APP_CFG_TEMP_THRESHOLD,2147483647);CHECK(AppConfig_Get()->temp_threshold==100);
 
     AppConfig_Init();
@@ -469,7 +501,7 @@ int main(void) {
     /* CRC-valid but out-of-range old records retain the old recovery rules. */
     memset(eeprom,255,sizeof(eeprom));memcpy(eeprom,legacy_invalid_values,sizeof(legacy_invalid_values));Config_Load();
     CHECK(AppConfig_Get()->led_mode==2);CHECK(AppConfig_Get()->bump_mode==0);
-    CHECK(AppConfig_Get()->led_manual_pwm==100);CHECK(temp_threhold==100);CHECK(CO2_Threhold==2000);
+    CHECK(AppConfig_Get()->led_manual_pwm==100);CHECK(temp_threhold==30);CHECK(CO2_Threhold==2000);
     CHECK(AppConfig_Get()->ldr_low==100);CHECK(AppConfig_Get()->ldr_high==1000);
     CHECK(AppConfig_Get()->soil_low==30);CHECK(AppConfig_Get()->soil_high==75);
     CHECK(AppConfig_Get()->pid_target_lux==200);CHECK(AppConfig_Get()->pid_dead_zone==20);
@@ -503,10 +535,10 @@ int main(void) {
     return assertions==EXPECTED_ASSERTIONS?0:32000;
 }
 '''
-expected_assertions=harness.count('CHECK(')-1+47
+expected_assertions=harness.count('CHECK(')-1+51
 harness=harness.replace('EXPECTED_ASSERTIONS',str(expected_assertions))
 (OUT / 'test.c').write_text(harness, encoding='utf-8')
-source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c','modules/app/src/app_key_port.c','modules/middleware/src/mw_alarm.c','modules/app/src/app_alarm_port.c']
+source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c','modules/app/src/app_key_port.c','modules/middleware/src/mw_climate.c','modules/middleware/src/mw_alarm.c','modules/app/src/app_alarm_port.c']
 sources = []
 for rel in source_rel:
     p = OUT / Path(rel).name

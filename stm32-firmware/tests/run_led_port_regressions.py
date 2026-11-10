@@ -63,7 +63,7 @@ void mock_compare(TIM_HandleTypeDef*,uint32_t,uint32_t);
 #include "app_config.h"
 int _fltused=0;
 static uint32_t tick;
-static RuntimeConfig runtime={2,0,50,25,2000,100,1000,30,75,200,20,1500,0,0};
+static RuntimeConfig runtime={2,0,50,25,2000,100,1000,30,75,200,20,1500,0,0,20};
 const RuntimeConfig *AppConfig_Get(void){return &runtime;}
 static unsigned set_calls;static AppConfigKey set_key;static int32_t set_value;
 AppConfigResult AppConfig_Set(AppConfigKey key,int32_t value){++set_calls;set_key=key;set_value=value;return APP_CONFIG_UNCHANGED;}

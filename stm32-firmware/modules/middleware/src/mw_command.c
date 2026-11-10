@@ -3,10 +3,10 @@
 #include <string.h>
 
 static const char *const names[COMMAND_KEY_COUNT] = {
-    "led", "bump", "CO2threhold", "droughtthrehold", "moistthrehold", "tempthrehold"
+    "led", "bump", "CO2threhold", "droughtthrehold", "moistthrehold", "tempthrehold", "temp_low_threshold"
 };
-static const int32_t minimum[COMMAND_KEY_COUNT] = {0, 0, 350, 0, 0, 0};
-static const int32_t maximum[COMMAND_KEY_COUNT] = {2, 2, 4000, 100, 100, 100};
+static const int32_t minimum[COMMAND_KEY_COUNT] = {0, 0, 350, 0, 0, 1, 0};
+static const int32_t maximum[COMMAND_KEY_COUNT] = {2, 2, 4000, 100, 100, 100, 99};
 
 CommandKey Command_FindKey(const char *name)
 {
@@ -34,6 +34,7 @@ CommandStatus Command_Plan(const CommandEntry *entries, uint8_t count,
         candidate.values[key] = entries[i].value;
     }
     if (candidate.values[COMMAND_SOIL_LOW] > candidate.values[COMMAND_SOIL_HIGH]) return COMMAND_CONFLICT;
+    if (candidate.values[COMMAND_TEMP_LOW] >= candidate.values[COMMAND_TEMP]) return COMMAND_CONFLICT;
     *desired = candidate;
     return COMMAND_OK;
 }
@@ -46,7 +47,7 @@ const char *Command_Message(CommandStatus status)
         case COMMAND_BAD_TYPE: return "integer value required";
         case COMMAND_OUT_OF_RANGE: return "value out of range";
         case COMMAND_DUPLICATE: return "duplicate property";
-        case COMMAND_CONFLICT: return "soil low exceeds high";
+        case COMMAND_CONFLICT: return "threshold pair conflict";
         case COMMAND_INTERNAL: return "command apply failed";
         default: return "invalid request";
     }

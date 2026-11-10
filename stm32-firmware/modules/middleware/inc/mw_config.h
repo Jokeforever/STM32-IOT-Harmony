@@ -8,7 +8,7 @@
  *   - 24C02 双槽存储，Slot A = 0x00，Slot B = 0x40
  *   - 每个槽带 magic / version / size / sequence / CRC32
  *   - 写入空闲槽后读回校验，通过才切换活动槽
- *   - 支持 v1 -> v2 配置迁移
+ *   - 支持 v1/v2 -> v3 配置迁移
  *   - 参数变化后延时写入，避免频繁擦写 EEPROM
  *
  * 迁移提示（换 MCU 时）：
@@ -29,13 +29,14 @@ extern "C" {
  * 配置常量
  * ============================================================ */
 #define CONFIG_MAGIC       0x43464731U
-#define CONFIG_VERSION     2U
+#define CONFIG_VERSION     3U
+#define CONFIG_VERSION_V2  2U
 #define CONFIG_VERSION_V1  1U
 #define CONFIG_SLOT_A      0x00U
 #define CONFIG_SLOT_B      0x40U
 
 /* ============================================================
- * 当前配置结构（v2）
+ * 当前配置结构（v3，52字节）
  * ============================================================ */
 typedef struct
 {
@@ -59,6 +60,8 @@ typedef struct
     int32_t  pid_kp_x1000;
     int32_t  pid_ki_x1000;
     int32_t  pid_kd_x1000;
+    uint8_t temp_low_threshold;
+    uint8_t reserved[3]; /* 固定v3布局，构造时清零 */
     uint32_t crc32;
 } DeviceConfig;
 

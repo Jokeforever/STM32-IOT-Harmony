@@ -139,9 +139,17 @@ int main(void)
     e[0].value=80;e[1].key=COMMAND_SOIL_HIGH;e[1].value=90;
     CHECK(AppCommands_Execute(e,2).status==COMMAND_OK);CHECK(AppConfig_Get()->soil_low==80&&AppConfig_Get()->soil_high==90);
     e[0].value=10;e[1].value=20;CHECK(AppCommands_Execute(e,2).status==COMMAND_OK);CHECK(AppConfig_Get()->soil_low==10&&AppConfig_Get()->soil_high==20);
-    for(i=0;i<6;i++){before.values[i]=0;desired.values[i]=123;}before.values[COMMAND_SOIL_HIGH]=100;
+    for(i=0;i<7;i++){before.values[i]=0;desired.values[i]=123;}before.values[COMMAND_SOIL_HIGH]=100;before.values[COMMAND_TEMP]=30;before.values[COMMAND_TEMP_LOW]=20;
     e[0].key=(CommandKey)-1;e[0].value=0;CHECK(Command_Plan(e,1,&before,&desired)==COMMAND_UNKNOWN_KEY);CHECK(desired.values[0]==123);
-    CHECK(Command_Plan(e,7,&before,&desired)==COMMAND_BAD_REQUEST);
+    CHECK(Command_Plan(e,8,&before,&desired)==COMMAND_BAD_REQUEST);
+
+    /* New temperature pair: valid crossing batches in both directions, invalid all-or-nothing. */
+    reset();CHECK(invoke("{\"id\":\"81\",\"params\":{\"temp_low_threshold\":40,\"tempthrehold\":50}}")==200);
+    CHECK(AppConfig_Get()->temp_threshold==50&&AppConfig_Get()->temp_low_threshold==40);
+    CHECK(invoke("{\"id\":\"82\",\"params\":{\"tempthrehold\":20,\"temp_low_threshold\":10}}")==200);
+    CHECK(AppConfig_Get()->temp_threshold==20&&AppConfig_Get()->temp_low_threshold==10);
+    reset();CHECK(invoke("{\"id\":\"83\",\"params\":{\"led\":1,\"temp_low_threshold\":30}}")==400);
+    CHECK(dirty==0&&AppConfig_Get()->led_mode==2&&AppConfig_Get()->temp_low_threshold==20);
     /* Each generated JSON case resets all business state. */
     JSON_CASES
     reset();CHECK(invoke("{\"params\":{\"led\":1},\"id\":\"9\"}")==200);CHECK(AppConfig_Get()->led_mode==1);
@@ -185,11 +193,11 @@ int main(void)
     packet="{\"id\":\"21\",\"params\":{\"led\":1}}\0junk";packet_length=(unsigned)strlen(packet)+5;OneNet_RevPro(NULL);CHECK(published==0);CHECK(dirty==0);
     /* Sweep command planning independently over scalar limits and soil relationships. */
     for(i=0;i<6;i++)for(j=0;j<101;j++){
-        CommandState snapshot={{2,0,2000,30,75,25}};
+        CommandState snapshot={{2,0,2000,30,75,30,20}};
         e[0].key=(CommandKey)i;e[0].value=(int32_t)j;
         result.status=Command_Plan(e,1,&snapshot,&desired);
         if(result.status==COMMAND_OK){CHECK(desired.values[i]==(int32_t)j);CHECK(desired.values[3]<=desired.values[4]);}
-        else {CHECK(snapshot.values[i]==(i==0?2:i==1?0:i==2?2000:i==3?30:i==4?75:25));}
+        else {CHECK(snapshot.values[i]==(i==0?2:i==1?0:i==2?2000:i==3?30:i==4?75:30));}
     }
     CHECK(live==0);CHECK(unexpected_print==0);text("PASS: production command/OneJSON/MQTT checks: ");number(checks);text("\n");return 0;
 }

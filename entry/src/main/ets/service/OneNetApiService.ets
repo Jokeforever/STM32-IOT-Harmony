@@ -46,6 +46,7 @@ interface OneNetSetParams {
   droughtthrehold?: number;
   moistthrehold?: number;
   tempthrehold?: number;
+  temp_low_threshold?: number;
 }
 
 export class OneNetApiService {
@@ -183,6 +184,8 @@ export class OneNetApiService {
         params.moistthrehold = value;
       } else if (identifier === 'tempthrehold') {
         params.tempthrehold = value;
+      } else if (identifier === 'temp_low_threshold') {
+        params.temp_low_threshold = value;
       }
 
       const body: OneNetSetBody = {

@@ -1,6 +1,6 @@
 from pathlib import Path
 import argparse,shutil,subprocess,sys,tempfile
-parser=argparse.ArgumentParser(description='Storage-call equivalence against the frozen pre-port configuration code.')
+parser=argparse.ArgumentParser(description='Current v3 storage through byte port versus equivalent direct EEPROM boundary.')
 parser.add_argument('--firmware-root',type=Path,default=Path(__file__).resolve().parents[1])
 parser.add_argument('--overlay',type=Path)
 parser.add_argument('--clang',default=shutil.which('clang') or r'F:\DEVECO\DevEco Studio\sdk\default\openharmony\native\llvm\bin\clang.exe')
@@ -22,7 +22,7 @@ typedef struct {uint8_t memory[256];RuntimeConfig runtime;Event trace[16];unsign
 static Context contexts[2];
 static unsigned active;
 static uint32_t now;
-static const RuntimeConfig defaults={2,0,50,25,2000,100,1000,30,75,200,20,1500,0,0};
+static const RuntimeConfig defaults={2,0,50,30,2000,100,1000,30,75,200,20,1500,0,0,20};
 int _fltused=0;
 void *memset(void *p,int c,size_t n){uint8_t *b=p;while(n--)*b++=(uint8_t)c;return p;}
 void *memcpy(void *p,const void *q,size_t n){uint8_t *b=p;const uint8_t *a=q;while(n--)*b++=*a++;return p;}
@@ -53,7 +53,7 @@ uint8_t AppConfig_Restore(const RuntimeConfig *r){contexts[active].runtime=*r;re
 static int same_runtime(const RuntimeConfig *a,const RuntimeConfig *b)
 {
     return a->led_mode==b->led_mode&&a->bump_mode==b->bump_mode&&a->led_manual_pwm==b->led_manual_pwm&&
-      a->temp_threshold==b->temp_threshold&&a->co2_threshold==b->co2_threshold&&a->ldr_low==b->ldr_low&&a->ldr_high==b->ldr_high&&
+      a->temp_threshold==b->temp_threshold&&a->temp_low_threshold==b->temp_low_threshold&&a->co2_threshold==b->co2_threshold&&a->ldr_low==b->ldr_low&&a->ldr_high==b->ldr_high&&
       a->soil_low==b->soil_low&&a->soil_high==b->soil_high&&a->pid_target_lux==b->pid_target_lux&&a->pid_dead_zone==b->pid_dead_zone&&
       a->pid_kp_x1000==b->pid_kp_x1000&&a->pid_ki_x1000==b->pid_ki_x1000&&a->pid_kd_x1000==b->pid_kd_x1000;
 }
@@ -114,7 +114,9 @@ int main(void)
     return 0;
 }
 """
-legacy=read('tests/fixtures/config_before_port.c')
+legacy=read('modules/middleware/src/mw_config.c')
+legacy=legacy.replace('#include "mw_config_port.h"','#include "i2c.h"')
+legacy=legacy.replace('ConfigPort_NowMs()', 'HAL_GetTick()').replace('ConfigPort_Read(', 'EEPROM24C02_Read(').replace('ConfigPort_Write(', 'EEPROM24C02_Write(')
 renames=''.join('#define '+name+' Legacy_'+name+'\n' for name in ['Config_Load','Config_Save','Config_Process','Config_MarkDirty','Config_IsDirty'])
 with tempfile.TemporaryDirectory(prefix='stm32-config-port-') as td:
     out=Path(td)
@@ -123,7 +125,7 @@ with tempfile.TemporaryDirectory(prefix='stm32-config-port-') as td:
     for name,rel in [('mw_config.h','modules/middleware/inc/mw_config.h'),('mw_config_port.h','modules/middleware/inc/mw_config_port.h'),('app_config.h','modules/app/inc/app_config.h')]:put(name,read(rel))
     put('main.h','#include <stdint.h>\nuint32_t HAL_GetTick(void);\n')
     put('i2c.h','#include <stdint.h>\n#define EEPROM_24C02_SIZE 256U\nuint32_t HAL_GetTick(void);\nuint8_t EEPROM24C02_Read(uint8_t,uint8_t*,uint16_t);\nuint8_t EEPROM24C02_Write(uint8_t,const uint8_t*,uint16_t);\n')
-    put('string.h','#include <stddef.h>\nvoid *memset(void*,int,size_t);\n')
+    put('string.h','#include <stddef.h>\nvoid *memset(void*,int,size_t);void *memcpy(void*,const void*,size_t);\n')
     sources=[put('test.c',harness),put('legacy.c',renames+legacy),put('mw_config.c',read('modules/middleware/src/mw_config.c')),put('app_config_port.c',read('modules/app/src/app_config_port.c'))]
     cmd=[args.clang,'--target=x86_64-pc-windows-msvc','-ffreestanding','-fno-builtin','-fuse-ld=lld','-nostdlib','-O0',
          '-Wall','-Wextra','-Werror','-Wl,/entry:main,/subsystem:console','-I'+str(out),*sources,'-o',str(out/'test.exe')]
@@ -134,4 +136,4 @@ with tempfile.TemporaryDirectory(prefix='stm32-config-port-') as td:
         print('FAIL at test.c line',r.returncode)
         if 0<r.returncode<=len(harness.splitlines()):print(harness.splitlines()[r.returncode-1])
         sys.exit(1)
-print('PASS: 1000 legacy/new storage operations plus debounce/retry/wrap vectors; call traces, status, bytes, runtime and dirty flags match.')
+print('PASS: 1000 current-v3 port/direct storage operations plus debounce/retry/wrap vectors; call traces, status, bytes, runtime and dirty flags match.')

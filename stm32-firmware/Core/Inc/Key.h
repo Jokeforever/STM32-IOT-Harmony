@@ -10,7 +10,7 @@
 
 #define LDR_STEP 100
 #define CO2_STEP 100
-#define TEMP_STEP 2
+#define TEMP_STEP 1 /* 与App一致，温度上下限每次调整1℃。 */
 #define BUMP_STEP 2
 
 void Key_Func(void);

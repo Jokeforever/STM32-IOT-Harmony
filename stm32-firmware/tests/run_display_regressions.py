@@ -53,10 +53,11 @@ static void number(unsigned n){char b[16];unsigned i=15;b[i]=0;do{b[--i]=(char)(
 typedef struct {unsigned kind,x,y,arg;char string[32];} Event;
 typedef struct {unsigned used,bad,config_reads,sensor_reads;Event events[32];} Context;
 static Context contexts[2];static unsigned active,checks,cases;
-static RuntimeConfig runtime={2,0,50,25,2000,100,1000,30,75,200,20,1500,0,0};
+static RuntimeConfig runtime={2,0,50,25,2000,100,1000,30,75,200,20,1500,0,0,20};
 static SensorData sensors={23,57,456,61,900,11};
 float water_vol=0.5f;
 volatile DisplayScreen CurrentScreen=DISPLAY_NONE;
+uint8_t Monitor_para1;
 volatile Abnormal abnormal[3];
 LED_Control led_ctrl;
 const RuntimeConfig *AppConfig_Get(void){++contexts[active].config_reads;return &runtime;}
@@ -75,14 +76,16 @@ void OLED_ShowString(uint8_t x,uint8_t y,uint8_t *s,uint8_t size){
 void OLED_Clear(void){(void)event(3,0,0,0);}
 static unsigned equal(const char *a,const char *b){while(*a&&*a==*b){++a;++b;}return *a==*b;}
 static uint32_t hash(const void *p,size_t n){const unsigned char *s=p;uint32_t h=2166136261U;while(n--){h^=*s++;h*=16777619U;}return h;}
-static uint32_t state(void){return hash(&runtime,sizeof(runtime))^hash(&sensors,sizeof(sensors))^hash(&water_vol,sizeof(water_vol))^hash(&led_ctrl,sizeof(led_ctrl))^(uint32_t)CurrentScreen;}
+static uint32_t state(void){return hash(&runtime,sizeof(runtime))^hash(&sensors,sizeof(sensors))^hash(&water_vol,sizeof(water_vol))^hash(&led_ctrl,sizeof(led_ctrl))^(uint32_t)CurrentScreen^(uint32_t)Monitor_para1;}
 LEGACY_PROTOTYPES
 static void invoke(unsigned legacy,unsigned op){
     if(legacy){switch(op){case 0:Legacy_Display1_Init();break;case 1:Legacy_Display2_Init();break;case 2:Legacy_Display3_Init();break;case 3:Legacy_Display4_Init();break;case 4:Legacy_Display5_Init();break;case 5:Legacy_Refresh1_Data();break;case 6:Legacy_Refresh2_Data();break;case 7:Legacy_Refresh3_Data();break;case 8:Legacy_Refresh4_Data();break;case 9:Legacy_Refresh5_Data();break;case 10:Legacy_Display_Data();break;case 11:Legacy_LED_Display();break;default:Legacy_Bump_Display();break;}}
     else{switch(op){case 0:Display1_Init();break;case 1:Display2_Init();break;case 2:Display3_Init();break;case 3:Display4_Init();break;case 4:Display5_Init();break;case 5:Refresh1_Data();break;case 6:Refresh2_Data();break;case 7:Refresh3_Data();break;case 8:Refresh4_Data();break;case 9:Refresh5_Data();break;case 10:Display_Data();break;case 11:LED_Display();break;default:Bump_Display();break;}}
 }
 static void clear(unsigned index){contexts[index].used=contexts[index].bad=contexts[index].config_reads=contexts[index].sensor_reads=0;}
+static int expected_parameter_page(unsigned op);
 static int pair(unsigned op){
+    if(op==3||op==4||op==8||op==9||(op==10&&(CurrentScreen==DISPLAY_SCREEN4||CurrentScreen==DISPLAY_SCREEN5)))return expected_parameter_page(op);
     unsigned i;uint32_t before=state();++cases;clear(0);clear(1);
     active=0;invoke(1,op);CHECK(state()==before);active=1;invoke(0,op);CHECK(state()==before);
     CHECK(!contexts[0].bad&&!contexts[1].bad);CHECK(contexts[0].used==contexts[1].used);
@@ -105,6 +108,29 @@ static int expected_string(unsigned index,unsigned x,unsigned y,const char *valu
     const Event *e=&contexts[1].events[index];
     CHECK(e->kind==2);CHECK(e->x==x);CHECK(e->y==y);CHECK(e->arg==16);CHECK(equal(e->string,value));return 0;
 }
+static int expected_parameter_page(unsigned op){
+    static const unsigned ys[4]={0,2,4,6},selections[4]={0,1,2,6};
+    static const char *labels[4]={"LL:","LH:","TH:","TL:"};
+    static const char *soil_labels[3]={"BL:","BH:","CO:"};
+    unsigned soil_page=(op==4||op==9||(op==10&&CurrentScreen==DISPLAY_SCREEN5));
+    unsigned init=(op==3||op==4),rows=soil_page?3U:4U;
+    unsigned i;uint32_t before=state();Context *c=&contexts[1];
+    ++cases;clear(1);active=1;invoke(0,op);CHECK(state()==before);CHECK(!c->bad);CHECK(c->sensor_reads==0);
+    CHECK(c->used==(init?rows:2U*rows));
+    for(i=0;i<rows;++i){
+        const Event *e=&c->events[init?i:2*i];
+        CHECK(e->kind==2&&e->arg==16&&e->y==ys[i]);
+        if(init){CHECK(e->x==12&&equal(e->string,soil_page?soil_labels[i]:labels[i]));}
+        else {
+            const Event *n=&c->events[2*i+1];
+            CHECK(e->x==0&&equal(e->string,Monitor_para1==(soil_page?3U+i:selections[i])?">":" "));
+            CHECK(n->kind==2&&n->arg==16&&n->x==48&&n->y==ys[i]);
+            /* All output pixels fit in 128x64 at the real 8x16 ASCII font. */
+            CHECK(n->string[5]==0&&n->x+5*8<=128&&n->y+1<8);
+        }
+    }
+    return 0;
+}
 int main(void){
     unsigned i,j,k,rng=0x37E2A61U;
     const float volumes[]={0.0f,0.1f,0.25f,1.5f,10.0f,123.4f,9999.0f};
@@ -118,6 +144,22 @@ int main(void){
     {int r=expected_string(0,36,0,":456 ");if(r)return r;}
     PAIR(7);CHECK(contexts[1].used==4);
     {int r=expected_string(0,72,0,":61  ");if(r)return r;r=expected_string(3,36,6,":0.5  ");if(r)return r;}
+    /* Independent literal expectations for four-row values, units and selected cursor. */
+    runtime.ldr_low=0;runtime.ldr_high=9999;runtime.temp_threshold=100;runtime.temp_low_threshold=0;
+    Monitor_para1=6;PAIR(3);PAIR(8);
+    {int r=expected_string(1,48,0,"   0 ");if(r)return r;r=expected_string(3,48,2,"9999 ");if(r)return r;
+     r=expected_string(5,48,4,"100C ");if(r)return r;r=expected_string(7,48,6,"  0C ");if(r)return r;}
+    runtime.temp_threshold=30;runtime.temp_low_threshold=20;Monitor_para1=2;PAIR(8);
+    {int r=expected_string(5,48,4," 30C ");if(r)return r;r=expected_string(7,48,6," 20C ");if(r)return r;}
+    for(i=0;i<7;++i){Monitor_para1=(uint8_t)i;PAIR(8);}
+    /* Page5 independent values and cursor selection, including shortened strings. */
+    runtime.soil_low=0;runtime.soil_high=100;runtime.co2_threshold=4000;Monitor_para1=3;PAIR(4);PAIR(9);
+    {int r=expected_string(1,48,0,"  0% ");if(r)return r;r=expected_string(3,48,2,"100% ");if(r)return r;
+     r=expected_string(5,48,4,"4000 ");if(r)return r;}
+    runtime.soil_low=30;runtime.soil_high=75;runtime.co2_threshold=350;Monitor_para1=5;PAIR(9);
+    {int r=expected_string(1,48,0," 30% ");if(r)return r;r=expected_string(3,48,2," 75% ");if(r)return r;
+     r=expected_string(5,48,4," 350 ");if(r)return r;}
+    for(i=0;i<8;++i){Monitor_para1=(uint8_t)i;PAIR(9);}
     /* Every valid page crossed with valid LED/pump mode combinations. */
     for(i=0;i<6;++i)for(j=0;j<3;++j)for(k=0;k<3;++k){CurrentScreen=(DisplayScreen)i;runtime.led_mode=(uint8_t)j;runtime.bump_mode=(uint8_t)k;PAIR(10);}
     CurrentScreen=(DisplayScreen)-1;PAIR(10);CHECK(contexts[1].used==9);
@@ -129,10 +171,10 @@ int main(void){
         sensors.co2_ppm=(uint16_t)rng;sensors.valid_mask=(uint8_t)(i&11U);
         runtime.led_mode=(uint8_t)(i%4U);runtime.bump_mode=(uint8_t)((i/4U)%4U);
         runtime.ldr_low=(uint16_t)(rng%10000U);runtime.ldr_high=(uint16_t)((rng>>3)%10000U);
-        runtime.temp_threshold=(uint8_t)(rng%101U);runtime.soil_low=(uint16_t)((rng>>4)%101U);runtime.soil_high=(uint16_t)((rng>>6)%101U);runtime.co2_threshold=(uint16_t)(350U+rng%3651U);
+        runtime.temp_threshold=(uint8_t)(rng%101U);runtime.temp_low_threshold=(uint8_t)((rng>>7)%100U);Monitor_para1=(uint8_t)(i%8U);runtime.soil_low=(uint16_t)((rng>>4)%101U);runtime.soil_high=(uint16_t)((rng>>6)%101U);runtime.co2_threshold=(uint16_t)(350U+rng%3651U);
         water_vol=volumes[i%7U];CurrentScreen=(DisplayScreen)(i%7U);PAIR(i%13U);
     }
-    text("PASS: full display assertions: ");number(checks);text("; comparison cases: ");number(cases);text("\n");return 0;
+    text("PASS: full display assertions: ");number(checks);text("; verified page cases: ");number(cases);text("\n");return 0;
 }
 '''
     prototypes='\n'.join('void Legacy_'+n+'(void);' for n in names if n!='bufdat')
@@ -141,4 +183,4 @@ int main(void){
     exe=out / 'test.exe'
     run([a.clang,*flags,'-fuse-ld=lld','-nostdlib','-Wl,/entry:main,/subsystem:console',str(test),str(production),str(old),str(ucrt),str(kernel),'-o',str(exe)])
     r=run([str(exe)]);print(r.stdout+r.stderr,end='')
-print('PASS: full production Display.c, real host CRT formatting, all page/mode outputs versus frozen source; coordinates/glyphs/text/order and read-only state checked. No hardware/network.')
+print('PASS: full production Display.c, real host CRT formatting, unchanged pages/modes versus frozen source; both parameter pages have independent cursor/value/layout checks; coordinates/glyphs/text/order and read-only state checked. No hardware/network.')

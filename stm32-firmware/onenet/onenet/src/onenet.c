@@ -545,6 +545,8 @@ unsigned short OneNet_FillBuf(char *buf)
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
 		"\"tempthrehold\":{\"value\":%d},", AppConfig_Get()->temp_threshold);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
+		"\"temp_low_threshold\":{\"value\":%d},", AppConfig_Get()->temp_low_threshold);
+	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
 		"\"sensor_status\":{\"value\":%d},", (int)sensors->valid_mask);
 	len = OneNet_Append(buf, ONENET_JSON_BUF_SIZE, len,
 		"\"moist\":{\"value\":%d}", sensors->soil_moisture_pct);

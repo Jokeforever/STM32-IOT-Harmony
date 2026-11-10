@@ -83,7 +83,7 @@ export class ControlTracker {
 
   static supported(identifier: string): boolean {
     return identifier === 'led' || identifier === 'bump' || identifier === 'CO2threhold' ||
-      identifier === 'droughtthrehold' || identifier === 'moistthrehold' || identifier === 'tempthrehold';
+      identifier === 'droughtthrehold' || identifier === 'moistthrehold' || identifier === 'tempthrehold' || identifier === 'temp_low_threshold';
   }
 
   private static copy(request: ControlRequest): ControlRequest {

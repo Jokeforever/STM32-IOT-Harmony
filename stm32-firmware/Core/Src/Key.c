@@ -23,7 +23,7 @@ extern uint32_t HP_OFF_MS ;              // 高压关 1.5s
 
 
 extern Key Keys[4];
-uint8_t Monitor_para1 = 0; //0 = LDRH,1 = LDRL,2 = BUMPH,3 = BUMPL  4 = TEMPH,5=TEMPL,6=CO2
+uint8_t Monitor_para1 = 0; /* 参数页4：0光照下限、1光照上限、2通风上限、6加热下限；页5：3土壤下限、4上限、5 CO2。 */
 
 void Key_Scan(void)
 {
@@ -87,8 +87,8 @@ static void Key_AdjustParameter(int direction)
             case 1: (void)AppConfig_Adjust(APP_CFG_LIGHT_HIGH, direction * LDR_STEP); break;
             case 2:
                 (void)AppConfig_Adjust(APP_CFG_TEMP_THRESHOLD, direction * TEMP_STEP);
-                Monitor_para1 = 0; /* 保留原温度项操作后返回首项的行为。 */
                 break;
+            case 6: (void)AppConfig_Adjust(APP_CFG_TEMP_LOW_THRESHOLD, direction * TEMP_STEP); break;
             default: Monitor_para1 = 0; break;
         }
     }
@@ -116,8 +116,12 @@ void Key_Func(void)
             case DISPLAY_SCREEN1: Display1_Init(); break;
             case DISPLAY_SCREEN2: Display2_Init(); break;
             case DISPLAY_SCREEN3: Display3_Init(); break;
-            case DISPLAY_SCREEN4: Display4_Init(); break;
-            case DISPLAY_SCREEN5: Display5_Init(); break;
+            case DISPLAY_SCREEN4:
+                if (Monitor_para1 != 0U && Monitor_para1 != 1U && Monitor_para1 != 2U && Monitor_para1 != 6U) Monitor_para1 = 0U;
+                Display4_Init(); break;
+            case DISPLAY_SCREEN5:
+                if (Monitor_para1 < 3U || Monitor_para1 > 5U) Monitor_para1 = 3U;
+                Display5_Init(); break;
             default: break;
         }
         Keys[0].ClickFlag = 0; Keys[0].State = 0;
@@ -126,13 +130,18 @@ void Key_Func(void)
     {
         if (CurrentScreen == DISPLAY_SCREEN4)
         {
-            if (Monitor_para1 > 3) Monitor_para1 = 0;
-            Monitor_para1 = (Monitor_para1 + 1) % 3;
+            switch (Monitor_para1) {
+                case 0: Monitor_para1 = 1; break;
+                case 1: Monitor_para1 = 2; break;
+                case 2: Monitor_para1 = 6; break;
+                case 6: Monitor_para1 = 0; break;
+                default: Monitor_para1 = 0; break;
+            }
         }
         else if (CurrentScreen == DISPLAY_SCREEN5)
         {
-            if (Monitor_para1 < 3) Monitor_para1 = 3;
-            Monitor_para1 = (Monitor_para1 + 1) % 6;
+            if (Monitor_para1 < 3U || Monitor_para1 > 5U) Monitor_para1 = 3U;
+            else Monitor_para1 = (Monitor_para1 == 5U) ? 3U : (uint8_t)(Monitor_para1 + 1U);
         }
         else if (config->led_mode == MODE_CALIBRATION && CurrentScreen == DISPLAY_SCREEN2)
         {

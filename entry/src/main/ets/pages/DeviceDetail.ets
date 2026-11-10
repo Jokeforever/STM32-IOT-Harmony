@@ -443,11 +443,11 @@ export struct DeviceDetail {
 
 
   private getThresholdMin(identifier: string): number {
-    return identifier === 'CO2threhold' ? 350 : 0;
+    return identifier === 'CO2threhold' ? 350 : (identifier === 'tempthrehold' ? 1 : 0);
   }
 
   private getThresholdMax(identifier: string): number {
-    return identifier === 'CO2threhold' ? 4000 : 100;
+    return identifier === 'CO2threhold' ? 4000 : (identifier === 'temp_low_threshold' ? 99 : 100);
   }
 
 
@@ -458,6 +458,17 @@ export struct DeviceDetail {
     const current = Number(raw);
     if (raw.trim() === '' || !Number.isInteger(current)) { this.errorMessage = '尚未取得有效阈值，请先刷新'; return; }
     const next = Math.max(this.getThresholdMin(identifier), Math.min(this.getThresholdMax(identifier), current + delta));
+    if (identifier === 'tempthrehold' || identifier === 'temp_low_threshold') {
+      const peerKey = identifier === 'tempthrehold' ? 'temp_low_threshold' : 'tempthrehold';
+      const peerRaw = PropertyHelper.getValue(this.properties, peerKey);
+      const peer = Number(peerRaw);
+      if (peerRaw.trim() === '' || !Number.isInteger(peer)) {
+        this.errorMessage = '请先同步两个温度阈值，并确认OneNET已添加加热温度下限属性'; return;
+      }
+      if ((identifier === 'tempthrehold' && next <= peer) || (identifier === 'temp_low_threshold' && next >= peer)) {
+        this.errorMessage = '加热温度下限必须小于通风温度上限'; return;
+      }
+    }
     if (next !== current) { await this.sendControl(identifier, next); }
   }
 
@@ -678,11 +689,19 @@ export struct DeviceDetail {
               onDecrease: () => { this.adjustThreshold('moistthrehold', -1); },
               onIncrease: () => { this.adjustThreshold('moistthrehold', 1); } })
             Divider().color(AppTheme.border)
-            ThresholdStepper({ label: '温度阈值', valueText: this.getDisplayValue('tempthrehold'),
+            ThresholdStepper({ label: '通风温度上限', valueText: this.getDisplayValue('tempthrehold'),
               unit: this.getUnit('tempthrehold'), buttonEnabled: this.controlEnabled('tempthrehold'),
               feedback: this.controlText('tempthrehold'), attention: this.controlAttention('tempthrehold'),
               onDecrease: () => { this.adjustThreshold('tempthrehold', -1); },
               onIncrease: () => { this.adjustThreshold('tempthrehold', 1); } })
+            Divider().color(AppTheme.border).margin({ top: 8, bottom: 8 })
+            ThresholdStepper({ label: '加热温度下限', valueText: this.getDisplayValue('temp_low_threshold'),
+              unit: this.getUnit('temp_low_threshold'), buttonEnabled: this.controlEnabled('temp_low_threshold'),
+              feedback: this.controlText('temp_low_threshold'), attention: this.controlAttention('temp_low_threshold'),
+              onDecrease: () => { this.adjustThreshold('temp_low_threshold', -1); },
+              onIncrease: () => { this.adjustThreshold('temp_low_threshold', 1); } })
+            Text('温度控制回差1℃；低温与CO₂超限时允许同时加热、通风。')
+              .fontSize(11).fontColor(AppTheme.secondary).margin({ top: 10 })
           }
           .width('100%').padding({ left: 18, right: 18, top: 2, bottom: 2 })
           .backgroundColor(AppTheme.surface).border({ width: 1, color: AppTheme.border }).borderRadius(22)

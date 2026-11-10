@@ -178,7 +178,7 @@ async function main() {
   });
   const api = new OneNetApiService(); api.createAuthorization = async () => 'test-only';
   const resetApi = r => { response = r; httpCode = 200; transportError = undefined; creates = 0; destroys = 0; sent = []; };
-  for (const [key, value] of [['led', 1], ['bump', 2], ['CO2threhold', 1800], ['droughtthrehold', 30], ['moistthrehold', 75], ['tempthrehold', 20]]) {
+  for (const [key, value] of [['led', 1], ['bump', 2], ['CO2threhold', 1800], ['droughtthrehold', 30], ['moistthrehold', 75], ['tempthrehold', 30], ['temp_low_threshold', 20]]) {
     await scenario('production API preserves payload and exposes device receipt: ' + key, async () => {
       resetApi({ code: 0, data: { code: 200, id: '7' } });
       const r = key === 'led' ? await api.setLedMode(value) : key === 'bump' ? await api.setBumpMode(value) : await api.setThreshold(key, value);
@@ -219,7 +219,7 @@ async function main() {
     yes(host.controlEnabled('led')); eq(host.confirmationTimer, -1); eq(calls.posts.length, 1);
   });
   await scenario('page confirms threshold without fabricating property value', async () => {
-    const { host, calls, tick } = makeHost(); host.properties = props('20', t - 1000, 'tempthrehold');
+    const { host, calls, tick } = makeHost(); host.properties = [...props('20', t - 1000, 'tempthrehold'), ...props('10', t - 1000, 'temp_low_threshold')];
     calls.query = async () => props('20', t - 1000, 'tempthrehold'); await host.adjustThreshold('tempthrehold', 1);
     eq(host.properties[0].value, '20'); eq(host.controlRequests[0].target, 21);
     calls.query = async () => props('21', t, 'tempthrehold'); await tick();
@@ -270,6 +270,27 @@ async function main() {
   await scenario('transport error reports uncertainty and never changes mode', async () => {
     const { host, api, calls } = makeHost(); api.setLedMode = async () => { calls.posts.push(['led', 1]); throw Error('test timeout'); };
     await host.setLedMode(1); eq(host.controlRequests[0].phase, P.UNCERTAIN); eq(host.ledMode, 0); eq(calls.posts.length, 1);
+  });
+  await scenario('temperature pair labels and units', () => {
+    eq(models.PropertyHelper.getLabel('tempthrehold'), '通风温度上限');
+    eq(models.PropertyHelper.getLabel('temp_low_threshold'), '加热温度下限');
+    eq(models.PropertyHelper.getUnit('temp_low_threshold'), '℃');
+    yes(models.PropertyHelper.isKnownProperty('temp_low_threshold')); yes(T.supported('temp_low_threshold'));
+  });
+  await scenario('temperature pair client rejects crossing or missing peer', async () => {
+    const { host, calls } = makeHost();
+    host.properties = [...props('30', t - 1000, 'tempthrehold'), ...props('29', t - 1000, 'temp_low_threshold')];
+    await host.adjustThreshold('temp_low_threshold', 1); eq(calls.posts.length, 0); yes(host.errorMessage.includes('下限必须小于'));
+    await host.adjustThreshold('tempthrehold', -1); eq(calls.posts.length, 0);
+    host.properties = props('30', t - 1000, 'tempthrehold'); await host.adjustThreshold('tempthrehold', 1);
+    eq(calls.posts.length, 0); yes(host.errorMessage.includes('两个温度阈值'));
+  });
+  await scenario('lower temperature uses existing confirmation and actual report', async () => {
+    const { host, calls } = makeHost();
+    host.properties = [...props('30', t - 1000, 'tempthrehold'), ...props('20', t - 1000, 'temp_low_threshold')];
+    calls.query = async () => [...props('30', t, 'tempthrehold'), ...props('21', t, 'temp_low_threshold')];
+    await host.adjustThreshold('temp_low_threshold', 1);
+    eq(calls.posts, [['temp_low_threshold', 21]]); eq(host.controlRequests[0].phase, P.MATCHED);
   });
   console.log('PASS:', scenarios, 'control scenarios,', checks, 'checks. Production tracker/API/page methods; no network, credentials or ArkUI runtime.');
 }

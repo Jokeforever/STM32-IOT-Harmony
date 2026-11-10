@@ -5,7 +5,7 @@
 #include "main.h" /* PRIMASK：仅保护主循环提交水泵模式的几个指令。 */
 #include <stddef.h>
 
-#define RUNTIME_DEFAULTS {2U,0U,50U,25U,2000U,100U,1000U,30U,75U,200,20U,1500,0,0}
+#define RUNTIME_DEFAULTS {2U,0U,50U,30U,2000U,100U,1000U,30U,75U,200,20U,1500,0,0,20U}
 static const RuntimeConfig s_defaults = RUNTIME_DEFAULTS;
 static RuntimeConfig s_config = RUNTIME_DEFAULTS;
 static uint8_t s_previous_led = 2U;
@@ -19,6 +19,7 @@ static uint8_t ReadValue(const RuntimeConfig *c, AppConfigKey key, int32_t *valu
         case APP_CFG_BUMP_MODE: *value = c->bump_mode; return 1U;
         case APP_CFG_MANUAL_PWM: *value = c->led_manual_pwm; return 1U;
         case APP_CFG_TEMP_THRESHOLD: *value = c->temp_threshold; return 1U;
+        case APP_CFG_TEMP_LOW_THRESHOLD: *value = c->temp_low_threshold; return 1U;
         case APP_CFG_CO2_THRESHOLD: *value = c->co2_threshold; return 1U;
         case APP_CFG_LIGHT_LOW: *value = c->ldr_low; return 1U;
         case APP_CFG_LIGHT_HIGH: *value = c->ldr_high; return 1U;
@@ -41,7 +42,8 @@ static uint8_t Bounds(const RuntimeConfig *c, AppConfigKey key, int32_t *low, in
         case APP_CFG_LED_MODE: *low = 0; *high = 2; return 1U;
         case APP_CFG_BUMP_MODE: *low = 0; *high = 2; return 1U;
         case APP_CFG_MANUAL_PWM: *low = 0; *high = 100; return 1U;
-        case APP_CFG_TEMP_THRESHOLD: *low = 0; *high = 100; return 1U;
+        case APP_CFG_TEMP_THRESHOLD: *low = (int32_t)c->temp_low_threshold + 1; *high = 100; return 1U;
+        case APP_CFG_TEMP_LOW_THRESHOLD: *low = 0; *high = (int32_t)c->temp_threshold - 1; return 1U;
         case APP_CFG_CO2_THRESHOLD: *low = 350; *high = 4000; return 1U;
         case APP_CFG_LIGHT_LOW: *low = 0; *high = 9999; return 1U;
         case APP_CFG_LIGHT_HIGH: *low = 0; *high = 9999; return 1U;
@@ -120,6 +122,7 @@ AppConfigResult AppConfig_Set(AppConfigKey key, int32_t value)
         case APP_CFG_LED_MODE: s_config.led_mode = (uint8_t)value; break;
         case APP_CFG_MANUAL_PWM: s_config.led_manual_pwm = (uint8_t)value; break;
         case APP_CFG_TEMP_THRESHOLD: s_config.temp_threshold = (uint8_t)value; break;
+        case APP_CFG_TEMP_LOW_THRESHOLD: s_config.temp_low_threshold = (uint8_t)value; break;
         case APP_CFG_CO2_THRESHOLD: s_config.co2_threshold = (uint16_t)value; break;
         case APP_CFG_LIGHT_LOW: s_config.ldr_low = (uint16_t)value; break;
         case APP_CFG_LIGHT_HIGH: s_config.ldr_high = (uint16_t)value; break;
@@ -132,7 +135,7 @@ AppConfigResult AppConfig_Set(AppConfigKey key, int32_t value)
         case APP_CFG_PID_KD: s_config.pid_kd_x1000 = (int32_t)value; break;
         default: return APP_CONFIG_REJECTED;
     }
-    if (key == APP_CFG_LED_MODE || key >= APP_CFG_PID_TARGET) LED_PID_Reset();
+    if (key == APP_CFG_LED_MODE || (key >= APP_CFG_PID_TARGET && key <= APP_CFG_PID_KD)) LED_PID_Reset();
     Config_MarkDirty();
     return APP_CONFIG_CHANGED;
 }

@@ -138,7 +138,9 @@ export class PropertyHelper {
     } else if (identifier === 'moistthrehold') {
       return '湿润阈值';
     } else if (identifier === 'tempthrehold') {
-      return '温度阈值';
+      return '通风温度上限';
+    } else if (identifier === 'temp_low_threshold') {
+      return '加热温度下限';
     } else if (identifier === 'sensor_status') {
       return '传感器状态';
     }
@@ -146,7 +148,7 @@ export class PropertyHelper {
   }
 
   static getUnit(identifier: string): string {
-    if (identifier === 'temp' || identifier === 'tempthrehold') {
+    if (identifier === 'temp' || identifier === 'tempthrehold' || identifier === 'temp_low_threshold') {
       return '℃';
     } else if (
       identifier === 'humi' ||
@@ -242,6 +244,7 @@ export class PropertyHelper {
       identifier === 'droughtthrehold' ||
       identifier === 'moistthrehold' ||
       identifier === 'tempthrehold' ||
+      identifier === 'temp_low_threshold' ||
       identifier === 'sensor_status';
   }
 }

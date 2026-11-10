@@ -44,16 +44,43 @@ typedef struct
     uint32_t crc32;
 } DeviceConfigV1;
 
+typedef struct
+{
+    uint32_t magic;
+    uint16_t version;
+    uint16_t size;
+    uint16_t sequence;
+    uint8_t  led_mode;
+    uint8_t  bump_mode;
+    uint8_t  led_manual_pwm;
+    uint8_t  temp_threshold;
+    uint16_t co2_threshold;
+    uint16_t ldr_low;
+    uint16_t ldr_high;
+    uint16_t soil_low;
+    uint16_t soil_high;
+    uint16_t soil_wet_adc;
+    uint16_t soil_dry_adc;
+    int16_t  pid_target_lux;
+    uint16_t pid_dead_zone;
+    int32_t  pid_kp_x1000;
+    int32_t  pid_ki_x1000;
+    int32_t  pid_kd_x1000;
+    uint32_t crc32;
+} DeviceConfigV2;
+
 /* 在目标编译器上锁定旧EEPROM布局，避免结构体调整破坏已有配置。 */
-typedef char ConfigV2SizeCheck[(sizeof(DeviceConfig) == 48U) ? 1 : -1];
-typedef char ConfigV2CRCCheck[(offsetof(DeviceConfig, crc32) == 44U) ? 1 : -1];
+typedef char ConfigV3SizeCheck[(sizeof(DeviceConfig) == 52U) ? 1 : -1];
+typedef char ConfigV3CRCCheck[(offsetof(DeviceConfig, crc32) == 48U) ? 1 : -1];
+typedef char LegacyV2SizeCheck[(sizeof(DeviceConfigV2) == 48U && offsetof(DeviceConfigV2, crc32) == 44U) ? 1 : -1];
 typedef char ConfigV1SizeCheck[(sizeof(DeviceConfigV1) == 32U) ? 1 : -1];
 
 /* 双槽读取缓冲，两个结构体共用同一块 64 字节空间 */
 typedef union
 {
     uint8_t       raw[64];
-    DeviceConfig  v2;
+    DeviceConfig  current;
+    DeviceConfigV2 v2;
     DeviceConfigV1 v1;
 } ConfigSlot;
 
@@ -118,6 +145,26 @@ static uint8_t Config_IsValid(const DeviceConfig *config)
                          (uint32_t)(sizeof(DeviceConfig) - sizeof(uint32_t))) == config->crc32) ? 1U : 0U;
 }
 
+static uint8_t Config_IsValidV2(const DeviceConfigV2 *config)
+{
+    return (uint8_t)(config->magic == CONFIG_MAGIC && config->version == CONFIG_VERSION_V2 &&
+        config->size == sizeof(DeviceConfigV2) &&
+        Config_CRC32((const uint8_t *)config, offsetof(DeviceConfigV2, crc32)) == config->crc32);
+}
+
+static void Config_UpgradeV2(DeviceConfig *out, const DeviceConfigV2 *in)
+{
+    RuntimeConfig defaults;
+    AppConfig_GetDefaults(&defaults);
+    memset(out, 0, sizeof(*out));
+    memcpy(out, in, offsetof(DeviceConfigV2, crc32));
+    out->version = CONFIG_VERSION;
+    out->size = (uint16_t)sizeof(*out);
+    /* 旧单温度语义不再沿用，按本次确认升级为30/20，其余参数保留。 */
+    out->temp_threshold = defaults.temp_threshold;
+    out->temp_low_threshold = defaults.temp_low_threshold;
+}
+
 static uint8_t Config_IsValidV1(const DeviceConfigV1 *config)
 {
     if (config == NULL)
@@ -142,7 +189,7 @@ static uint8_t Config_IsValidV1(const DeviceConfigV1 *config)
 }
 
 /* ============================================================
- * v1 -> v2 迁移
+ * v1/v2 -> v3 迁移
  * ============================================================ */
 static void Config_UpgradeV1(DeviceConfig *out, const DeviceConfigV1 *in)
 {
@@ -156,7 +203,8 @@ static void Config_UpgradeV1(DeviceConfig *out, const DeviceConfigV1 *in)
     out->led_mode = in->led_mode;
     out->bump_mode = in->bump_mode;
     out->led_manual_pwm = in->led_manual_pwm;
-    out->temp_threshold = in->temp_threshold;
+    out->temp_threshold = defaults.temp_threshold;
+    out->temp_low_threshold = defaults.temp_low_threshold;
     out->co2_threshold = in->co2_threshold;
     out->ldr_low = in->ldr_low;
     out->ldr_high = in->ldr_high;
@@ -183,10 +231,17 @@ static uint8_t Config_ReadSlot(uint8_t slot_addr, DeviceConfig *out, uint8_t *is
         return 0U;
     }
 
-    if (Config_IsValid(&slot.v2) != 0U)
+    if (Config_IsValid(&slot.current) != 0U)
     {
-        *out = slot.v2;
+        *out = slot.current;
         *is_v1 = 0U;
+        return 1U;
+    }
+
+    if (Config_IsValidV2(&slot.v2) != 0U)
+    {
+        Config_UpgradeV2(out, &slot.v2);
+        *is_v1 = 1U; /* 旧格式迁移标志，供延时保存v3。 */
         return 1U;
     }
 
@@ -216,6 +271,7 @@ static void Config_SetDefault(void)
     g_device_config.bump_mode = defaults.bump_mode;
     g_device_config.led_manual_pwm = defaults.led_manual_pwm;
     g_device_config.temp_threshold = defaults.temp_threshold;
+    g_device_config.temp_low_threshold = defaults.temp_low_threshold;
     g_device_config.co2_threshold = defaults.co2_threshold;
     g_device_config.ldr_low = defaults.ldr_low;
     g_device_config.ldr_high = defaults.ldr_high;
@@ -251,9 +307,10 @@ static void Config_Sanitize(DeviceConfig *config)
     {
         config->led_manual_pwm = 100U;
     }
-    if (config->temp_threshold > 100U)
+    if (config->temp_threshold > 100U || config->temp_low_threshold >= config->temp_threshold)
     {
-        config->temp_threshold = 100U;
+        config->temp_threshold = defaults.temp_threshold;
+        config->temp_low_threshold = defaults.temp_low_threshold;
     }
     if ((config->co2_threshold < 350U) || (config->co2_threshold > 4000U))
     {
@@ -306,6 +363,7 @@ static void Config_Apply(void)
     runtime.bump_mode = g_device_config.bump_mode;
     runtime.led_manual_pwm = g_device_config.led_manual_pwm;
     runtime.temp_threshold = g_device_config.temp_threshold;
+    runtime.temp_low_threshold = g_device_config.temp_low_threshold;
     runtime.co2_threshold = g_device_config.co2_threshold;
     runtime.ldr_low = g_device_config.ldr_low;
     runtime.ldr_high = g_device_config.ldr_high;
@@ -335,6 +393,7 @@ static void Config_FromCurrent(DeviceConfig *config)
     config->bump_mode = runtime->bump_mode;
     config->led_manual_pwm = runtime->led_manual_pwm;
     config->temp_threshold = runtime->temp_threshold;
+    config->temp_low_threshold = runtime->temp_low_threshold;
     config->co2_threshold = runtime->co2_threshold;
     config->ldr_low = runtime->ldr_low;
     config->ldr_high = runtime->ldr_high;
@@ -412,7 +471,7 @@ void Config_Load(void)
     }
     else if (chosen_v1 != 0U)
     {
-        /* 从 v1 迁移过来的配置需要重新写入 v2 格式 */
+        /* 从 v1 迁移过来的配置需要重新写入 v3 格式 */
         g_config_dirty = 1U;
         g_config_dirty_tick = ConfigPort_NowMs();
     }

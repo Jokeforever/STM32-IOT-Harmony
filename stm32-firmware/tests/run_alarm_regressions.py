@@ -63,7 +63,7 @@ void HAL_GPIO_WritePin(unsigned port,unsigned pin,unsigned value);
 volatile Abnormal abnormal[3],Legacy_abnormal[3];
 volatile DisplayScreen CurrentScreen=DISPLAY_NONE;
 void Legacy_Beep_Init(void);void Legacy_IS_Normal(void);void Legacy_Handler(void);
-static RuntimeConfig config={2,0,50,25,2000,100,300,30,75,200,20,1500,0,0};
+static RuntimeConfig config={2,0,50,25,2000,100,300,30,75,200,20,1500,0,0,20};
 static SensorData data={25,50,200,50,1000,11};
 typedef struct {unsigned port,pin,value;} Event;
 typedef struct {unsigned used,bad,config_reads,sensor_reads;Event events[4];} Context;
