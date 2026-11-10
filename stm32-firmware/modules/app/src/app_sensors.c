@@ -2,14 +2,11 @@
  * 统一传感器采集服务。
  * 把原main.c的采集、有效位和滤波历史移至此处。
  * 保持原默认值、驱动返回值语义、调用顺序与滤波行为。
- * 换传感器时主要修改本文件的驱动适配；消费者读取SensorData。
+ * 通过SensorPort读取；当前具体驱动适配集中在app_sensor_port.c。
  */
 #include "app_sensors.h"
 #include "mw_filter.h"
-#include "dht11.h"
-#include "TS.h"
-#include "usart3.h"
-#include "LDR.h"
+#include "mw_sensor_port.h"
 
 static SensorData s_data = {20U, 40U, 200U, 20U, 350U, 0U};
 static uint8_t s_temp_history[FILTER_MEDIAN3_WINDOW];
@@ -39,7 +36,7 @@ const SensorData *SensorService_GetData(void)
 
 uint8_t SensorService_ReadLight(void)
 {
-    return LDR_LuxData(&s_data.light_lux);
+    return (uint8_t)(SensorPort_ReadLight(&s_data.light_lux) == SENSOR_PORT_OK);
 }
 
 void SensorService_Poll(void)
@@ -48,9 +45,9 @@ void SensorService_Poll(void)
     uint8_t raw_temp = 0U;
     uint8_t raw_humi = 0U;
 
-    (void)TS_GetData(&s_data.soil_moisture_pct);
+    (void)SensorPort_ReadSoil(&s_data.soil_moisture_pct);
 
-    if (CO2GetData(&raw_ppm) != 0U)
+    if (SensorPort_ReadCO2(&raw_ppm) == SENSOR_PORT_OK)
     {
         s_data.co2_ppm = Filter_Median3_U16(s_co2_history, &s_co2_count, raw_ppm);
         s_data.valid_mask |= SENSOR_VALID_CO2;
@@ -60,7 +57,7 @@ void SensorService_Poll(void)
         s_data.valid_mask &= (uint8_t)~SENSOR_VALID_CO2;
     }
 
-    if (DHT11_Read_Data(&raw_temp, &raw_humi) == DHT11_OK)
+    if (SensorPort_ReadTempHumi(&raw_temp, &raw_humi) == SENSOR_PORT_OK)
     {
         s_data.temperature_c = Filter_Median3_U8(s_temp_history, &s_temp_count, raw_temp);
         s_data.humidity_pct = Filter_Median3_U8(s_humi_history, &s_humi_count, raw_humi);

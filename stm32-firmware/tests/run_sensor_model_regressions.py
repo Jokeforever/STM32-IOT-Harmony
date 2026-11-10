@@ -18,6 +18,7 @@ with tempfile.TemporaryDirectory(prefix='stm32-sensors-') as td:
     def header(name,text): (out/name).write_text(text,encoding='utf-8')
     header('sensor_data.h',read('modules/middleware/inc/sensor_data.h'))
     header('app_sensors.h',read('modules/app/inc/app_sensors.h'))
+    header('mw_sensor_port.h',read('modules/middleware/inc/mw_sensor_port.h'))
     header('mw_filter.h',read('modules/middleware/inc/mw_filter.h'))
     header('dht11.h','#include <stdint.h>\n#define DHT11_OK 0U\nuint8_t DHT11_Read_Data(uint8_t *,uint8_t *);\n')
     for name,fn in [('TS.h','TS_GetData'),('usart3.h','CO2GetData'),('LDR.h','LDR_LuxData')]:
@@ -85,7 +86,7 @@ int main(void) {
 """.replace('__BASELINE_CODE__',BASELINE)
     (out/'test.c').write_text(harness,encoding='utf-8')
     sources=[]
-    for rel in ['modules/app/src/app_sensors.c','modules/middleware/src/mw_filter.c']:
+    for rel in ['modules/app/src/app_sensors.c','modules/app/src/app_sensor_port.c','modules/middleware/src/mw_filter.c']:
         p=out/Path(rel).name;p.write_text(read(rel),encoding='utf-8');sources.append(str(p))
     cmd=[args.clang,'--target=x86_64-pc-windows-msvc','-ffreestanding','-fno-builtin','-fuse-ld=lld','-nostdlib','-O0',
          '-Wall','-Wextra','-Werror','-Wl,/entry:main,/subsystem:console','-I'+str(out),str(out/'test.c'),*sources,'-o',str(out/'test.exe')]

@@ -54,3 +54,14 @@ python tests/run_led_port_regressions.py
 123616项断言，含4096步冻结旧实现/生产新实现对照和多周期千分比换算。公共LED.h与端口头单独在无HAL/按键/OLED头的环境编译。支持--firmware-root/--overlay/--clang/--windows-sdk，Windows SDK导入库只用于主机测试输出。
 fixtures/led_before_port.c与.h仅用于测试，未加入目标工程。旧控制313项改为链接真实app_led_port，实现保留当前ARR=999的边界模拟；新回归另验证不同ARR与不支持周期的拒绝。不是HIL，不接网络或实物灯具。
 真实工程编译0错误5条既有警告；用户于2026-11-10确认本轮五项实物检查均通过。确认后同步脱敏副本并按约定提交上传；实体负载测试继续暂缓。
+
+## 2026-11-10 传感器读取接口回归（用户实物验收通过）
+
+```powershell
+python tests/run_sensor_port_regressions.py
+python tests/run_sensor_model_regressions.py
+```
+
+新端口4625项：实际app_sensor_port.c配合驱动边界模拟，覆盖所有uint8返回值、DHT成功方向、整数边界、失败输出保留、空指针无底层调用等。实际服务/公开头在无HAL或具体驱动头环境编译。支持--firmware-root/--overlay/--clang。
+原采集9030项现链接实际新端口，保留独立旧采集参考与1000组输入，继续验证调用顺序、有效位、滤波及失效恢复。另五套控制/命令/配置/PID/LED回归全部通过。
+真实Keil完整重编译0错误5条既有cJSON警告；用户确认整板断电重启后联网及其他功能正常；验收后已同步仓库脱敏副本，按约定提交上传。学习与清单见docs/2026-11-10-Sensor-Port.md。不是HIL，不连接OneNET或使用真实密钥。
