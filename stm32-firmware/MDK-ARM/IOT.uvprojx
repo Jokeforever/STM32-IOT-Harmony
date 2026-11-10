@@ -520,6 +520,11 @@
           <GroupName>modules/app</GroupName>
           <Files>
             <File>
+              <FileName>app_key_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\modules\app\src\app_key_port.c</FilePath>
+            </File>
+            <File>
               <FileName>app_sensor_port.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\modules\app\src\app_sensor_port.c</FilePath>

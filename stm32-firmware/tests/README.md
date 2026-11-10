@@ -65,3 +65,15 @@ python tests/run_sensor_model_regressions.py
 新端口4625项：实际app_sensor_port.c配合驱动边界模拟，覆盖所有uint8返回值、DHT成功方向、整数边界、失败输出保留、空指针无底层调用等。实际服务/公开头在无HAL或具体驱动头环境编译。支持--firmware-root/--overlay/--clang。
 原采集9030项现链接实际新端口，保留独立旧采集参考与1000组输入，继续验证调用顺序、有效位、滤波及失效恢复。另五套控制/命令/配置/PID/LED回归全部通过。
 真实Keil完整重编译0错误5条既有cJSON警告；用户确认整板断电重启后联网及其他功能正常；验收后已同步仓库脱敏副本，按约定提交上传。学习与清单见docs/2026-11-10-Sensor-Port.md。不是HIL，不连接OneNET或使用真实密钥。
+
+## 2026-11-10 按键输入接口回归（用户五项实测通过）
+
+```powershell
+python tests/run_key_port_regressions.py
+python tests/run_control_regressions.py
+```
+
+新测试从生产Key.c提取Key_Scan原文，与冻结旧扫描函数及生产app_key_port.c共同编译。Key结构来自实际Key.h，GPIO边界模拟。6117步新旧状态/读取顺序对照、214535项断言通过；另用独立预期检查16种映射、短按/长按/释放边界、抖动/延迟消费、计数回绕与无HAL端口公开头。
+支持--firmware-root/--overlay/--clang/--windows-sdk。Windows SDK导入库只用于主机输出，不参与固件。
+原控制313项仍编译完整生产Key.c并链接新端口，补充Key_Func/配置/ISR集成检查。其他六套采集、LED、命令、配置、PID回归通过。
+真实Keil完整重编译0错误5条既有cJSON警告；用户于2026-11-10明确确认本轮五项实物检查均通过；已同步仓库脱敏副本，按约定提交上传。学习与清单见docs/2026-11-10-Key-Port.md。不是HIL，不连接OneNET或实体负载。

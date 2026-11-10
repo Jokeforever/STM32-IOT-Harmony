@@ -70,6 +70,7 @@ header('app_config.h', read('modules/app/inc/app_config.h'))
 header('mw_pid.h', read('modules/middleware/inc/mw_pid.h'))
 header('LED.h', read('Core/Inc/LED.h'))
 header('mw_led_port.h', read('modules/middleware/inc/mw_led_port.h'))
+header('mw_key_port.h', read('modules/middleware/inc/mw_key_port.h'))
 header('tim.h', '#include \"stm32f1xx_hal.h\"\n')
 header('gpio.h', '#include \"stm32f1xx_hal.h\"\n')
 header('Key.h', '#ifndef MOCK_KEY_H\n#define MOCK_KEY_H\n#include "stm32f1xx_hal.h"\ntypedef struct { uint8_t State, Pin_state, ClickFlag, LongClickFlag; uint32_t Presstime, Releasetime; } Key;\n#define LDR_STEP 100\n#define CO2_STEP 100\n#define TEMP_STEP 2\n#define BUMP_STEP 2\nvoid Key_Func(void);\n#include "LED.h"\n#include "bump.h"\n#endif\n')
@@ -503,7 +504,7 @@ int main(void) {
 expected_assertions=harness.count('CHECK(')-1+47
 harness=harness.replace('EXPECTED_ASSERTIONS',str(expected_assertions))
 (OUT / 'test.c').write_text(harness, encoding='utf-8')
-source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c']
+source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c','modules/app/src/app_key_port.c']
 sources = []
 for rel in source_rel:
     p = OUT / Path(rel).name

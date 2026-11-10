@@ -1,5 +1,6 @@
 #include "app_config.h"
 #include "Key.h"
+#include "mw_key_port.h"
 #include "mw_config.h"
 
 extern volatile DisplayScreen CurrentScreen;
@@ -26,10 +27,12 @@ uint8_t Monitor_para1 = 0; //0 = LDRH,1 = LDRL,2 = BUMPH,3 = BUMPL  4 = TEMPH,5=
 
 void Key_Scan(void)
 {
-	Keys[0].Pin_state = HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_4) == RESET?1:0;//page
-	Keys[1].Pin_state = HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_5) == RESET?1:0;//page2
-	Keys[2].Pin_state = HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_7) == RESET?1:0;//LED
-	Keys[3].Pin_state = HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_6) == RESET?1:0;//bump
+    uint8_t pressed = KeyPort_ReadPressedMask();
+
+    Keys[0].Pin_state = (uint8_t)((pressed & KEY_PORT_KEY1_MASK) != 0U);
+    Keys[1].Pin_state = (uint8_t)((pressed & KEY_PORT_KEY2_MASK) != 0U);
+    Keys[2].Pin_state = (uint8_t)((pressed & KEY_PORT_KEY3_MASK) != 0U);
+    Keys[3].Pin_state = (uint8_t)((pressed & KEY_PORT_KEY4_MASK) != 0U);
 	
 	
 	for(uint32_t i = 0; i<4;i++)
