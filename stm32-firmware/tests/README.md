@@ -89,3 +89,15 @@ python tests/run_led_port_regressions.py
 支持--firmware-root/--overlay/--clang/--windows-sdk。Windows SDK ucrt/kernel导入库仅用于主机格式化和输出，不进入固件。
 旧LED回归现从Display.c提取生产LED_Display参与链接，保留原123616项及独立控制文件无HAL/OLED编译检查；其他七套回归通过。页面和控制函数迁移范围另有原文保护检查。
 真实Keil完整重编译0错误5条既有cJSON警告；用户于2026-11-10确认本轮五项测试均通过；已同步仓库脱敏副本，按约定提交上传。学习与清单见docs/2026-11-10-Display-Separation.md。不是HIL，不连接真实网络或实体负载。
+
+## 2026-11-10 报警规则回归（用户清单验收通过）
+
+```powershell
+python tests/run_alarm_regressions.py
+python tests/run_control_regressions.py
+python tests/run_display_regressions.py
+```
+
+新回归编译完整生产beep.c和mw_alarm.c，与冻结旧判断/提示函数比较三通道状态及GPIO调用。4249组/108854项通过，含150组独立阈值/有效性向量、4096组变化输入、216组提示状态组合、空指针及数值边界。Handler/Beep_Init另做原文保护。
+规则及契约在无HAL/显示/配置头环境编译，公开头C++检查通过。支持--firmware-root/--overlay/--clang/--windows-sdk，SDK导入库仅用于主机输出。
+原控制313项使用真实报警头与规则，显示回归补齐新头，其余九套全部通过。真实Keil完整重编译0错误5条既有cJSON警告；用户于2026-11-10反馈本轮检查均通过，已同步固件脱敏副本，按约定提交上传。学习与清单见docs/2026-11-10-Alarm-Rules.md，未接提示硬件如实记为未实测。不是HIL，不连接真实网络或实体负载。

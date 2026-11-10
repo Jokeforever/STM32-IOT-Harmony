@@ -65,6 +65,7 @@ void mock_compare(unsigned value);
 for name in ('main.h', 'fan.h', 'jdq.h', 'beep.h'):
     header(name, read('Core/Inc/' + name))
 header('sensor_data.h', read('modules/middleware/inc/sensor_data.h'))
+header('mw_alarm.h', read('modules/middleware/inc/mw_alarm.h'))
 header('app_sensors.h', read('modules/app/inc/app_sensors.h'))
 header('app_config.h', read('modules/app/inc/app_config.h'))
 header('mw_pid.h', read('modules/middleware/inc/mw_pid.h'))
@@ -91,7 +92,7 @@ typedef enum { Bump_OFF=0, Bump_CALIBRATION=1, Bump_AUTO=2 } Bump_Mode;
 void Bump_Set(int mode);
 void BUMP_Init(void);
 #define HUMI_THRESHOLD_HIGH 75
-typedef enum { NONE=0, BRIGHT, DARK, DAMP, DROUGHT, HIGHCO2 } Abnormal;
+#include "mw_alarm.h"
 typedef enum { DISPLAY_NONE=0, DISPLAY_SCREEN1, DISPLAY_SCREEN2, DISPLAY_SCREEN3, DISPLAY_SCREEN4, DISPLAY_SCREEN5 } DisplayScreen;
 #define BUMP_ON HAL_GPIO_WritePin(GPIOB,GPIO_PIN_1,GPIO_PIN_SET)
 #define BUMP_OFF HAL_GPIO_WritePin(GPIOB,GPIO_PIN_1,GPIO_PIN_RESET)
@@ -504,7 +505,7 @@ int main(void) {
 expected_assertions=harness.count('CHECK(')-1+47
 harness=harness.replace('EXPECTED_ASSERTIONS',str(expected_assertions))
 (OUT / 'test.c').write_text(harness, encoding='utf-8')
-source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c','modules/app/src/app_key_port.c']
+source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c','modules/app/src/app_key_port.c','modules/middleware/src/mw_alarm.c']
 sources = []
 for rel in source_rel:
     p = OUT / Path(rel).name

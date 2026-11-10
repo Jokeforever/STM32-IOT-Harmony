@@ -17,14 +17,8 @@ typedef enum {
 		DISPLAY_SCREEN5		// 界面5： 参数2
 } DisplayScreen;
 
-typedef enum {
-		NONE = 0,
-		BRIGHT,
-		DARK,
-		DAMP,
-		DROUGHT,
-		HIGHCO2
-} Abnormal;
+/* 兼容原包含方式：报警状态定义归属独立规则契约。 */
+#include "mw_alarm.h"
 
 void Display1_Init(void);
 void Display2_Init(void);

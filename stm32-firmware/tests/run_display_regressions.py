@@ -20,7 +20,7 @@ ucrt=versions[-1];kernel=ucrt.parents[2] / 'um/x64/kernel32.lib';assert kernel.e
 with tempfile.TemporaryDirectory(prefix='stm32-display-') as td:
     out=Path(td);inc=out / 'include';inc.mkdir()
     def header(name,value):(inc / name).write_text(value,encoding='utf-8')
-    for name,rel in [('app_config.h','modules/app/inc/app_config.h'),('app_sensors.h','modules/app/inc/app_sensors.h'),('sensor_data.h','modules/middleware/inc/sensor_data.h'),('LED.h','Core/Inc/LED.h'),('mw_pid.h','modules/middleware/inc/mw_pid.h'),('mw_led_port.h','modules/middleware/inc/mw_led_port.h'),('bump.h','Core/Inc/bump.h'),('Display.h','Core/Inc/Display.h'),('oled.h','Core/Inc/oled.h')]:
+    for name,rel in [('app_config.h','modules/app/inc/app_config.h'),('app_sensors.h','modules/app/inc/app_sensors.h'),('sensor_data.h','modules/middleware/inc/sensor_data.h'),('mw_alarm.h','modules/middleware/inc/mw_alarm.h'),('LED.h','Core/Inc/LED.h'),('mw_pid.h','modules/middleware/inc/mw_pid.h'),('mw_led_port.h','modules/middleware/inc/mw_led_port.h'),('bump.h','Core/Inc/bump.h'),('Display.h','Core/Inc/Display.h'),('oled.h','Core/Inc/oled.h')]:
         header(name,read(rel))
     header('main.h','#include <stdint.h>\n')
     header('stm32f1xx_hal.h','#include <stdint.h>\n')

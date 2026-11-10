@@ -1,7 +1,7 @@
 #include "app_config.h"
 #include "app_sensors.h"
 #include "beep.h"
-#include "Display.h" /* 显式依赖显示枚举，不再经LED.h间接获取。 */
+#include "mw_alarm.h" /* 报警类型/规则独立于显示层。 */
 
 
 
@@ -14,57 +14,29 @@ void Beep_Init(void)
 }
 
 extern volatile Abnormal abnormal[3];
-extern volatile DisplayScreen CurrentScreen;
 
 void IS_Normal(void)
 {
     const SensorData *sensors = SensorService_GetData();
-	for(int i = 0; i<3;i++)
-	{
-		switch(i)
-		{
-			case 0:
-				if(sensors->light_lux > AppConfig_Get()->ldr_high)
-				{
-					abnormal[i] = BRIGHT;
+    const RuntimeConfig *config = AppConfig_Get();
+    AlarmThresholds thresholds;
+    Abnormal evaluated[ALARM_COUNT];
+    uint8_t i;
 
-				}
-			else if(sensors->light_lux<AppConfig_Get()->ldr_low)
-			{
-				abnormal[i] = DARK;
+    thresholds.light_low = config->ldr_low;
+    thresholds.light_high = config->ldr_high;
+    thresholds.soil_low = config->soil_low;
+    thresholds.soil_high = config->soil_high;
+    thresholds.co2_threshold = config->co2_threshold;
 
-			}
-			else
-			abnormal[i] = NONE;
-				break;
-			case 1:
-			if(sensors->soil_moisture_pct> AppConfig_Get()->soil_high)
-			{
-				abnormal[i] = DAMP;
-
-			}
-			else if(sensors->soil_moisture_pct< AppConfig_Get()->soil_low   )
-			{
-				abnormal[i] = DROUGHT;
-
-			}
-			else
-				abnormal[i] = NONE;
-				break;
-			case 2:
-			if(((sensors->valid_mask & SENSOR_VALID_CO2) != 0U) && (sensors->co2_ppm > AppConfig_Get()->co2_threshold))
-			{
-				abnormal[i] = HIGHCO2;
-
-			}
-			else
-			{
-				abnormal[i] = NONE;
-			}
-				break;	
-		}
-	}
-		Handler();
+    if (Alarm_Evaluate(sensors, &thresholds, evaluated) != 0U)
+    {
+        for (i = 0U; i < ALARM_COUNT; ++i)
+        {
+            abnormal[i] = evaluated[i];
+        }
+    }
+    Handler();
 }
 
 void Handler(void)

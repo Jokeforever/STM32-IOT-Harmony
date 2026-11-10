@@ -560,6 +560,11 @@
           <GroupName>modules/middleware</GroupName>
           <Files>
             <File>
+              <FileName>mw_alarm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\modules\middleware\src\mw_alarm.c</FilePath>
+            </File>
+            <File>
               <FileName>mw_command.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\modules\middleware\src\mw_command.c</FilePath>
