@@ -8,12 +8,13 @@
 #include "bump.h"
 #include "fan.h"
 #include "jdq.h"
+#include "mw_alarm_port.h"
 
 
 
-#define BEEP_ON		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12,GPIO_PIN_RESET)
+#define BEEP_ON		AlarmPort_SetBuzzer(1U)
 
-#define BEEP_OFF	HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12,GPIO_PIN_SET)
+#define BEEP_OFF	AlarmPort_SetBuzzer(0U)
 
 
 

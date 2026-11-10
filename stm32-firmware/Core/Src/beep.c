@@ -48,11 +48,11 @@ void Handler(void)
 			case 0:
 				if(abnormal[i] != NONE)
 				{ 
-					HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+					AlarmPort_SetIndicator(1U);
 				}
 				else
 				{
-					HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+					AlarmPort_SetIndicator(0U);
 				}
 				break;
 			case 1:

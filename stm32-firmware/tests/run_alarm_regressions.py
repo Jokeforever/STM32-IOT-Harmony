@@ -29,6 +29,9 @@ with tempfile.TemporaryDirectory(prefix='stm32-alarms-') as td:
     assert not re.search(r'\b(?:HAL_[A-Za-z0-9_]+|AppConfig_[A-Za-z0-9_]+|OLED_[A-Za-z0-9_]+)\b',read('modules/middleware/src/mw_alarm.c'))
     for name,rel in [('main.h','Core/Inc/main.h'),('beep.h','Core/Inc/beep.h'),('Display.h','Core/Inc/Display.h'),('LED.h','Core/Inc/LED.h'),('bump.h','Core/Inc/bump.h'),('fan.h','Core/Inc/fan.h'),('jdq.h','Core/Inc/jdq.h'),('oled.h','Core/Inc/oled.h'),('mw_pid.h','modules/middleware/inc/mw_pid.h'),('mw_led_port.h','modules/middleware/inc/mw_led_port.h'),('app_config.h','modules/app/inc/app_config.h'),('app_sensors.h','modules/app/inc/app_sensors.h')]:
         header(name,read(rel))
+    header('mw_alarm_port.h',read('modules/middleware/inc/mw_alarm_port.h'))
+    header('beep_before_alarm_port.h',read('tests/fixtures/beep_before_alarm_port.h'))
+    header('gpio.h','#include \"stm32f1xx_hal.h\"\n')
     header('TS.h','/* Unused ADC boundary; alarms only consume SensorData. */\n')
     header('usart3.h','/* Unused UART boundary; CO2 validity comes from SensorData. */\n')
     header('stdio.h','/* Renderer prototypes only; alarm adapter must not format output. */\n')
@@ -45,8 +48,9 @@ void HAL_GPIO_WritePin(unsigned port,unsigned pin,unsigned value);
 #endif
 ''')
     production=out / 'beep.c';production.write_text(read('Core/Src/beep.c'),encoding='utf-8')
-    fixture=out / 'alarm_before_extract.c';fixture.write_text(read('tests/fixtures/alarm_before_extract.c'),encoding='utf-8')
+    fixture=out / 'alarm_before_extract.c';fixture.write_text(read('tests/fixtures/alarm_before_extract.c').replace('#include \"beep.h\"','#include \"beep_before_alarm_port.h\"',1),encoding='utf-8')
     assert not re.search(r'#include\s+"Display.h"|\bDisplayScreen\b',read('Core/Src/beep.c'))
+    port=out / 'app_alarm_port.c';port.write_text(read('modules/app/src/app_alarm_port.c'),encoding='utf-8')
     old_obj=out / 'old.obj'
     names=['Beep_Init','IS_Normal','Handler','abnormal']
     run([a.clang,*flags,'-I'+str(inc),*['-D'+n+'=Legacy_'+n for n in names],'-c',str(fixture),'-o',str(old_obj)])
@@ -152,6 +156,6 @@ int main(void){
 '''
     test=out / 'test.c';test.write_text(harness,encoding='utf-8')
     exe=out / 'test.exe'
-    run([a.clang,*flags,'-I'+str(inc),'-fuse-ld=lld','-nostdlib','-Wl,/entry:main,/subsystem:console',str(test),str(production),str(core),str(old_obj),str(kernel[-1]),'-o',str(exe)])
+    run([a.clang,*flags,'-I'+str(inc),'-fuse-ld=lld','-nostdlib','-Wl,/entry:main,/subsystem:console',str(test),str(production),str(core),str(port),str(old_obj),str(kernel[-1]),'-o',str(exe)])
     r=run([str(exe)]);print(r.stdout+r.stderr,end='')
 print('PASS: independent threshold/equality/validity vectors, frozen/current adapter and GPIO trace, mixed alarms/recovery, numeric/null boundaries and HAL-free rule compilation. No hardware/network.')

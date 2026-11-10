@@ -101,3 +101,16 @@ python tests/run_display_regressions.py
 新回归编译完整生产beep.c和mw_alarm.c，与冻结旧判断/提示函数比较三通道状态及GPIO调用。4249组/108854项通过，含150组独立阈值/有效性向量、4096组变化输入、216组提示状态组合、空指针及数值边界。Handler/Beep_Init另做原文保护。
 规则及契约在无HAL/显示/配置头环境编译，公开头C++检查通过。支持--firmware-root/--overlay/--clang/--windows-sdk，SDK导入库仅用于主机输出。
 原控制313项使用真实报警头与规则，显示回归补齐新头，其余九套全部通过。真实Keil完整重编译0错误5条既有cJSON警告；用户于2026-11-10反馈本轮检查均通过，已同步固件脱敏副本，按约定提交上传。学习与清单见docs/2026-11-10-Alarm-Rules.md，未接提示硬件如实记为未实测。不是HIL，不连接真实网络或实体负载。
+
+## 2026-11-10 报警输出端口（用户清单验收通过）
+
+```powershell
+python tests/run_alarm_port_regressions.py
+python tests/run_alarm_regressions.py
+python tests/run_control_regressions.py
+```
+
+新增端口3653项，覆盖两个输出各256种请求、低有效映射/次数/顺序、双通道独立及恢复、重复写入、原宏与if/else兼容、公开新头无HAL的C/C++编译。
+报警回归临时旧参考改包含冻结beep_before_alarm_port.h，以保留原直接GPIO宏，避免新旧共用新适配掩盖映射错误；新生产beep.c链接真实app_alarm_port.c。原报警4249组/108854项、控制313项及其余八套回归全部通过。
+IS_Normal和Beep_Init函数原文、Handler除两处提示灯替换外均有保护；GPIO初始化、规则及其他控制文件哈希核对未变。
+真实Keil完整重编译0错误5条既有cJSON警告，Code=50298、RO=6614、RW=208、ZI=7952。用户于2026-11-10反馈“验证均通过”，已同步固件脱敏副本，按约定提交上传，详见docs/2026-11-10-Alarm-Port.md。主机回归不是HIL，不连接真实网络或负载。
