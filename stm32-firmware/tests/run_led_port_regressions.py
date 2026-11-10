@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix='stm32-led-port-') as td:
     def header(name,value):(inc/name).write_text(value,encoding='utf-8')
     for name,rel in [('LED.h','Core/Inc/LED.h'),('mw_led_port.h','modules/middleware/inc/mw_led_port.h'),('mw_pid.h','modules/middleware/inc/mw_pid.h'),('app_config.h','modules/app/inc/app_config.h')]:
         value=read(rel);header(name,value)
-        if name!='app_config.h':(public/name).write_text(value,encoding='utf-8')
+        (public/name).write_text(value,encoding='utf-8')
     header('led_before_port.h',read('tests/fixtures/led_before_port.h'))
     header('stm32f1xx_hal.h',r'''
 #ifndef TEST_HAL_H
@@ -51,6 +51,12 @@ void mock_compare(TIM_HandleTypeDef*,uint32_t,uint32_t);
     if r.returncode:print(r.stdout+r.stderr);sys.exit(r.returncode)
     assert not re.search(r'#include\s+[<"](?:stm32|Key|oled)',read('Core/Inc/LED.h'))
     assert not re.search(r'\b(?:HAL_[A-Za-z0-9_]+|__HAL_[A-Za-z0-9_]+|htim3|TIM_CHANNEL_2)\b',read('Core/Src/LED.c'))
+    assert not re.search(r'OLED_|#include\s+[<"]oled',read('Core/Src/LED.c'))
+    control_only=out/'led_control_only.c'
+    control_only.write_text(read('Core/Src/LED.c'),encoding='utf-8')
+    r=subprocess.run([a.clang,'--target=x86_64-pc-windows-msvc','-ffreestanding','-fsyntax-only','-Wall','-Wextra','-Werror','-I'+str(public),str(control_only)],capture_output=True,text=True,encoding='utf-8',errors='replace')
+    if r.returncode:print(r.stdout+r.stderr);sys.exit(r.returncode)
+
     harness=r'''
 #include "LED.h"
 #include "stm32f1xx_hal.h"
@@ -153,6 +159,12 @@ int main(void){
     sources=[]
     for rel in ['Core/Src/LED.c','modules/app/src/app_led_port.c','modules/middleware/src/mw_pid.c']:
         file=out/Path(rel).name;file.write_text(read(rel),encoding='utf-8');sources.append(str(file))
+    # Compile the relocated production renderer, not a replacement stub.
+    display=read('Core/Src/Display.c');start=display.index('void LED_Display(void)');opening=display.index('{',start);depth=1;end=opening+1
+    while depth:depth+=(display[end]=='{')-(display[end]=='}');end+=1
+    renderer=out/'led_renderer.c'
+    renderer.write_text('#include "LED.h"\n#include "app_config.h"\n#include "oled.h"\n'+display[start:end],encoding='utf-8')
+    sources.append(str(renderer))
     fixture=out/'led_before_port.c';fixture.write_text(read('tests/fixtures/led_before_port.c'),encoding='utf-8')
     names=['LED_Set','LED_Init','LED_PID_Reset','LED_Update','LED_SetPWM','Mode_Switch','LED_Func','LED_Display','led_ctrl','ccr']
     obj=out/'legacy.obj'

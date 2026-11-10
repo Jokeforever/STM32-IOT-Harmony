@@ -77,3 +77,15 @@ python tests/run_control_regressions.py
 支持--firmware-root/--overlay/--clang/--windows-sdk。Windows SDK导入库只用于主机输出，不参与固件。
 原控制313项仍编译完整生产Key.c并链接新端口，补充Key_Func/配置/ISR集成检查。其他六套采集、LED、命令、配置、PID回归通过。
 真实Keil完整重编译0错误5条既有cJSON警告；用户于2026-11-10明确确认本轮五项实物检查均通过；已同步仓库脱敏副本，按约定提交上传。学习与清单见docs/2026-11-10-Key-Port.md。不是HIL，不连接OneNET或实体负载。
+
+## 2026-11-10 本机显示职责回归（用户五项实测通过）
+
+```powershell
+python tests/run_display_regressions.py
+python tests/run_led_port_regressions.py
+```
+
+新测试编译完整生产Display.c及真实公共头，与冻结旧页面/模式绘制对照，OLED输出边界模拟；同一真实主机CRT格式化，比较位置、字库、字体、字符串、顺序、读取次数和状态摘要。1608组/33379项通过，另有独立模式/典型读数预期。
+支持--firmware-root/--overlay/--clang/--windows-sdk。Windows SDK ucrt/kernel导入库仅用于主机格式化和输出，不进入固件。
+旧LED回归现从Display.c提取生产LED_Display参与链接，保留原123616项及独立控制文件无HAL/OLED编译检查；其他七套回归通过。页面和控制函数迁移范围另有原文保护检查。
+真实Keil完整重编译0错误5条既有cJSON警告；用户于2026-11-10确认本轮五项测试均通过；已同步仓库脱敏副本，按约定提交上传。学习与清单见docs/2026-11-10-Display-Separation.md。不是HIL，不连接真实网络或实体负载。

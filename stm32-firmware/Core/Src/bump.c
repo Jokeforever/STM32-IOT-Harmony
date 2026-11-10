@@ -150,25 +150,7 @@ void Bump_Control(void)
 	}
 }
 
-void Bump_Display(void)
-{
-	switch(AppConfig_Get()->bump_mode)
-	{
-		case Bump_OFF:
-						OLED_ShowCHinese(54,3,10);// 
-						OLED_ShowCHinese(72,3,11);// 
-						break;
-    case Bump_CALIBRATION:
-						OLED_ShowCHinese(54,3,8);// 
-						OLED_ShowCHinese(72,3,9);// 
-           break;
-						
-    case Bump_AUTO:
-						OLED_ShowCHinese(54,3,12);// 
-						OLED_ShowCHinese(72,3,13);// 
-						break;
-	}
-}
+/* 兼容绘制入口Bump_Display的实现已集中到Display.c。 */
 
 void Bump_Set(int mode )
 {

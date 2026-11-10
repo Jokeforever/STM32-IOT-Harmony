@@ -2,7 +2,7 @@
 /*
  * MODULE OVERVIEW
  * 文件：LED.c
- * 作用：LED PWM 控制、自动模式位置式 PID、手动模式和状态显示。
+ * 作用：LED PWM控制、自动模式位置式PID及手动模式；绘制在Display.c。
  * 关键函数：
  *   LED_Init()       初始化LED运行状态和PWM
  *   LED_Set()        切换关闭/常亮/自动模式
@@ -13,12 +13,11 @@
  *   自动模式每 1 秒读取一次光照并执行一次 PID。
  *   默认 Ki=0、Kd=0，保持原有 P 控制效果，后续再调参。
  */
-// PWM与时基通过端口访问，显示适配仍保留原OLED实现。
+// PWM与时基通过端口访问，本文件不直接依赖OLED。
 #include "mw_led_port.h"
 
 //硬件驱动
 #include "LED.h"
-#include "oled.h"
 
 
 
@@ -120,23 +119,4 @@ void LED_Func(void)
         }
 }
 
-void LED_Display(void)
-{
-	 switch (AppConfig_Get()->led_mode)
-				{    
-						case MODE_OFF:
-						OLED_ShowCHinese(64,3,10);// 
-						OLED_ShowCHinese(80,3,11);// 
-						break;
-												
-            case MODE_CALIBRATION:
-						OLED_ShowCHinese(64,3,8);// 
-						OLED_ShowCHinese(80,3,9);// 
-             break;
-						
-            case MODE_AUTO_PID:
-						OLED_ShowCHinese(64,3,12);// 
-						OLED_ShowCHinese(80,3,13);// 
-						break;
-				}
-}
+/* 兼容绘制入口LED_Display的实现已集中到Display.c。 */

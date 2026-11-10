@@ -184,3 +184,46 @@ void Display_Data(void)
         }
 		
 }
+
+
+/* 模式绘制集中于显示层；兼容声明仍位于LED.h/bump.h，调用方式不变。 */
+void LED_Display(void)
+{
+	 switch (AppConfig_Get()->led_mode)
+				{
+						case MODE_OFF:
+						OLED_ShowCHinese(64,3,10);//
+						OLED_ShowCHinese(80,3,11);//
+						break;
+
+            case MODE_CALIBRATION:
+						OLED_ShowCHinese(64,3,8);//
+						OLED_ShowCHinese(80,3,9);//
+             break;
+
+            case MODE_AUTO_PID:
+						OLED_ShowCHinese(64,3,12);//
+						OLED_ShowCHinese(80,3,13);//
+						break;
+				}
+}
+
+void Bump_Display(void)
+{
+	switch(AppConfig_Get()->bump_mode)
+	{
+		case Bump_OFF:
+						OLED_ShowCHinese(54,3,10);//
+						OLED_ShowCHinese(72,3,11);//
+						break;
+    case Bump_CALIBRATION:
+						OLED_ShowCHinese(54,3,8);//
+						OLED_ShowCHinese(72,3,9);//
+           break;
+
+    case Bump_AUTO:
+						OLED_ShowCHinese(54,3,12);//
+						OLED_ShowCHinese(72,3,13);//
+						break;
+	}
+}
