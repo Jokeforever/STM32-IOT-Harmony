@@ -36,7 +36,6 @@
 
 extern uint8_t esp8266_buf[512];     // 你的接收缓冲区
 extern unsigned short esp8266_cnt;
-extern uint8_t rx_buffer[1];
 volatile uint8_t received_data;
 
 /*
@@ -225,6 +224,11 @@ void Usart_SendString(UART_HandleTypeDef *huart, uint8_t *str, uint16_t len)
 
 void UsartPrintf(UART_HandleTypeDef *huart, char *fmt,...)
 {
+    /* USART1 专用于屏幕协议，禁止格式化日志写入。 */
+    if (huart == &huart1)
+    {
+        return;
+    }
 
 	unsigned char UsartPrintfBuf[296];
 	va_list ap;
@@ -265,11 +269,7 @@ void UsartPrintf(UART_HandleTypeDef *huart, char *fmt,...)
 //}
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if(huart == &huart1)
-    {
-        HAL_UART_Receive_IT(&huart1, rx_buffer, 1);
-    }
-		else	if(huart == &huart2)
+    if(huart == &huart2)
     {
 //        uint8_t received_data = huart->pRxBuffPtr[0]; // huart->pRxBuffPtr 指向启动接收时传入的缓冲区
 

@@ -96,7 +96,6 @@
 
 /* USER CODE BEGIN PV */
 Key Keys[4];
-uint8_t rx_buffer[1];
 float water_vol = 0.0f;
 extern uint8_t esp8266_buf[512];
 volatile Abnormal abnormal[3] = {NONE};
@@ -170,7 +169,7 @@ int main(void)
 	AppConfig_Init();
 	SensorService_Init();
 	Hardware_Init();
-	HAL_UART_Receive_IT(&huart1, rx_buffer, 1);
+	/* USART1 留给 VGUS 串口屏，由屏驱动管理收发。 */
 	HAL_UART_Receive_IT(&huart2, (uint8_t *)&received_data, 1);
 	USART3_Rx_Start_IT();
 	Config_Load();
