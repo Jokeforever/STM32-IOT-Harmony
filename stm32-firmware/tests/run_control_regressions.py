@@ -76,6 +76,7 @@ header('LED.h', read('Core/Inc/LED.h'))
 header('mw_led_port.h', read('modules/middleware/inc/mw_led_port.h'))
 header('mw_key_port.h', read('modules/middleware/inc/mw_key_port.h'))
 header('mw_pump_port.h', read('modules/middleware/inc/mw_pump_port.h'))
+header('mw_irrigation.h', read('modules/middleware/inc/mw_irrigation.h'))
 header('tim.h', '#include \"stm32f1xx_hal.h\"\n')
 header('gpio.h', '#include \"stm32f1xx_hal.h\"\n')
 header('Key.h', '#ifndef MOCK_KEY_H\n#define MOCK_KEY_H\n#include "stm32f1xx_hal.h"\ntypedef struct { uint8_t State, Pin_state, ClickFlag, LongClickFlag; uint32_t Presstime, Releasetime; } Key;\n#define LDR_STEP 100\n#define CO2_STEP 100\n#define TEMP_STEP 1\n#define BUMP_STEP 2\nvoid Key_Func(void);\n#include "LED.h"\n#include "bump.h"\n#endif\n')
@@ -88,11 +89,6 @@ header('bump.h', '''#ifndef MOCK_BUMP_H
 #include "oled.h"
 typedef enum { Bump_OFF=0, Bump_CALIBRATION=1, Bump_AUTO=2 } Bump_Mode;
 #define HUMI_THRESHOLD_LOW 30
-#define AREA 0.08f
-#define WATER_DEPTH 10.0f
-#define WATER_DENSITY 1.0f
-#define FLOW_RATE 1.2f
-#define MIN_WATER_VOLUME 0.1f
 void Bump_Set(int mode);
 void BUMP_Init(void);
 void Bump_Control(void);
@@ -127,6 +123,7 @@ harness = r'''
 #include "mw_config_port.h"
 #include "app_sensors.h"
 #include "app_config.h"
+#include "mw_irrigation.h"
 #include <stddef.h>
 TIM_HandleTypeDef htim3;
 Key Keys[4];
@@ -230,7 +227,47 @@ static void cloud_set(const char *name,int value) {
     (void)AppCommands_Execute(&command,1);
 }
 
+/* Frozen reference from the pump before estimator extraction. */
+static float legacy_irrigation_volume(uint16_t moisture, uint16_t low, uint16_t high)
+{
+    float volume = 0.0f;
+    if (moisture < high) {
+        if (moisture < low) {
+            const float diff = high - low;
+            volume = 0.08f * diff * 10.0f * 1.0f / 100.0f;
+        } else {
+            const float diff = high - moisture;
+            volume = 0.08f * diff * 10.0f * 1.0f / 100.0f;
+        }
+    }
+    if (volume > 0.0f && volume < 0.1f) {
+        volume = 0.1f;
+    }
+    return volume;
+}
+
+static int irrigation_estimates_match_legacy(void)
+{
+    for (uint16_t low = 0U; low <= 100U; ++low) {
+        for (uint16_t high = low; high <= 100U; ++high) {
+            for (uint16_t moisture = 0U; moisture <= 100U; ++moisture) {
+                const float volume = legacy_irrigation_volume(moisture, low, high);
+                const float minutes = volume / 1.2f;
+                const uint32_t auto_ms = (uint32_t)(minutes * 60000.0f);
+                const uint32_t pulse_ms = (uint32_t)(volume / 1.2f * 60000.0f);
+                const IrrigationEstimate estimate = Irrigation_Estimate(moisture, low, high);
+                if (estimate.volume_l != volume || estimate.duration_ms != auto_ms
+                    || estimate.duration_ms != pulse_ms) {
+                    return 0;
+                }
+            }
+        }
+    }
+    return 1;
+}
+
 int main(void) {
+    CHECK(irrigation_estimates_match_legacy());
     AppConfig_Init();
     /* 真正调用生产代码：温度/CO2 的四种组合和后执行报警的覆盖回归。 */
     (void)AppConfig_Set(APP_CFG_LIGHT_LOW,100);(void)AppConfig_Set(APP_CFG_LIGHT_HIGH,1000);(void)AppConfig_Set(APP_CFG_TEMP_THRESHOLD,25);
@@ -587,6 +624,7 @@ int main(void) {
     gpio_writes = 0;
     Bump_Control();
     CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    CHECK(water_vol > 0.439f && water_vol < 0.441f);
     advance_pump_ticks(49U);
     CHECK(pump_write_is(1U, GPIO_PIN_SET));
     advance_pump_ticks(1U);
@@ -616,6 +654,7 @@ int main(void) {
     ++tick;
     Bump_Control();
     CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    CHECK(water_vol > 0.439f && water_vol < 0.441f);
     advance_pump_ticks(2199U);
     CHECK(pump_write_is(1U, GPIO_PIN_SET));
     advance_pump_ticks(1U);
@@ -673,13 +712,28 @@ int main(void) {
     tick = 1U;
     Bump_Control();
     CHECK(pump_write_is(3U, GPIO_PIN_SET));
+    /* Finish the active run before testing the wet threshold. */
+    advance_pump_ticks(681U);
+    moist = AppConfig_Get()->soil_high;
+    CHECK(water_vol > 0.0f);
+    gpio_writes = 0;
+    tick += 30001U;
+    Bump_Control();
+    CHECK(pump_write_is(1U, GPIO_PIN_RESET) && water_vol == 0.0f);
+    CHECK(CurrentBump_mode == Bump_AUTO);
+
+    Bump_Set(Bump_CALIBRATION);
+    gpio_writes = 0;
+    Bump_Control();
+    CHECK(pump_write_is(1U, GPIO_PIN_RESET) && water_vol == 0.0f);
+    CHECK(CurrentBump_mode == Bump_CALIBRATION);
     return assertions==EXPECTED_ASSERTIONS?0:32000;
 }
 '''
 expected_assertions=harness.count('CHECK(')-1+51
 harness=harness.replace('EXPECTED_ASSERTIONS',str(expected_assertions))
 (OUT / 'test.c').write_text(harness, encoding='utf-8')
-source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_pump_port.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c','modules/app/src/app_key_port.c','modules/middleware/src/mw_climate.c','modules/app/src/app_climate_port.c','modules/middleware/src/mw_alarm.c','modules/app/src/app_alarm_port.c']
+source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/middleware/src/mw_irrigation.c','modules/app/src/app_pump_port.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c','modules/app/src/app_key_port.c','modules/middleware/src/mw_climate.c','modules/app/src/app_climate_port.c','modules/middleware/src/mw_alarm.c','modules/app/src/app_alarm_port.c']
 sources = []
 for rel in source_rel:
     p = OUT / Path(rel).name
@@ -701,3 +755,4 @@ if r.returncode:
 print('PASS: production fan/relay/alarm/PID/config functions with GPIO, time and EEPROM mocks.')
 print('Assertions:',expected_assertions)
 print('PASS: legacy EEPROM bytes/v1 migration/failure recovery, shared setters/key boundaries, mode persistence and ISR completion.')
+print('Irrigation estimates: 520251 cases matched both legacy durations.')

@@ -9,13 +9,14 @@
  *   Bump_Control()     根据模式执行水泵控制
  *   Bump_OnTimerTick()  处理定时器中断中的脉冲切换和到时关泵
  *   Bump_Set()         修改水泵模式
- *   Calculate_Water_Volume() 根据土壤湿度估算水量
+ *   Irrigation_Estimate() 估算水量和计时目标，见 mw_irrigation.c
  * 注意：
  *   首次上电默认 Bump_OFF，避免自动灌溉误启动。
  *   模式变化后会触发 Config_MarkDirty() 保存到 EEPROM。
  */
   #include "bump.h"
 #include "mw_pump_port.h"
+#include "mw_irrigation.h"
   #include "mw_config.h"
 
 extern float water_vol ;
@@ -30,27 +31,6 @@ void BUMP_Init(void)
     PumpPort_Set(0U);
 }
 
-float Calculate_Water_Volume(uint16_t current_humi)
-{
-    if (current_humi >= AppConfig_Get()->soil_high)
-		{
-        return 0.0f;  // 土壤湿润，无需灌溉
-    } 
-		else if (current_humi < AppConfig_Get()->soil_low)
-		{
-        // 干旱时按最大差值计算
-        float diff = AppConfig_Get()->soil_high - AppConfig_Get()->soil_low;
-        return AREA * diff * WATER_DEPTH * WATER_DENSITY / 100.0f;  // 转换为升（假设diff单位为%，需调整）
-    } 
-		else 
-		{
-        // 介于两者之间，线性插值
-        float diff = AppConfig_Get()->soil_high - current_humi;
-        return AREA * diff * WATER_DEPTH * WATER_DENSITY / 100.0f;
-    }
-   
-}
-
 static volatile uint32_t hp_ms_total = 0;       // 本次高压总时长
 static volatile uint32_t hp_ms_count = 0;      // 已运行时长
 static volatile uint8_t hp_running = 0;        // 是否正在高压模式
@@ -59,62 +39,50 @@ static volatile uint32_t hp_state_start = 0;   // 当前状态开始时刻
 static const uint32_t HP_ON_MS = 500;                 // 高压开 0.5s
 static const uint32_t HP_OFF_MS = 1500;              // 高压关 1.5s
 
-void Irrigation_Control(void) 
-	{
+void Irrigation_Control(void)
+{
     const SensorData *sensors = SensorService_GetData();
-		if(hp_running || waterflag)
-			return;
-		water_vol = Calculate_Water_Volume(sensors->soil_moisture_pct);
-		
-		 if (water_vol > 0.0f && water_vol < MIN_WATER_VOLUME) 
-		{
-        water_vol = MIN_WATER_VOLUME;
-    }
-    if (water_vol <= 0)
-		{
-        PumpPort_Set(0U);  // 无需灌溉，关闭水泵
+    if (hp_running || waterflag) {
         return;
     }
-    // 计算灌溉时间（假设水泵流量为FLOW_RATE L/min）
-     const float time_min = water_vol / FLOW_RATE;
-     time_ms = (uint32_t)(time_min * 60000.0f);  // 转换为毫秒
-    
-		waterflag = 1;
-		PumpPort_Set(1U);  // 开启水泵
-	
-}
-	
 
+    const RuntimeConfig *config = AppConfig_Get();
+    const IrrigationEstimate estimate = Irrigation_Estimate(
+        sensors->soil_moisture_pct, config->soil_low, config->soil_high);
+    water_vol = estimate.volume_l;
+    if (water_vol <= 0.0f) {
+        PumpPort_Set(0U);
+        return;
+    }
+
+    time_ms = estimate.duration_ms;
+    waterflag = 1;
+    PumpPort_Set(1U);
+}
 
 void Start_HighPressure_Irrigation(void)
 {
     const SensorData *sensors = SensorService_GetData();
-		
-		if (hp_running || waterflag) 
-		{
+    if (hp_running || waterflag) {
         return;
     }
-	 water_vol = Calculate_Water_Volume(sensors->soil_moisture_pct);
-    	 if (water_vol > 0.0f && water_vol < MIN_WATER_VOLUME) 
-		{
-        water_vol = MIN_WATER_VOLUME;
-    }
-    if (water_vol <= 0)
-		{
-        PumpPort_Set(0U);  // 无需灌溉，关闭水泵
+
+    const RuntimeConfig *config = AppConfig_Get();
+    const IrrigationEstimate estimate = Irrigation_Estimate(
+        sensors->soil_moisture_pct, config->soil_low, config->soil_high);
+    water_vol = estimate.volume_l;
+    if (water_vol <= 0.0f) {
+        PumpPort_Set(0U);
         return;
     }
-		
-    hp_ms_total = (uint32_t)(water_vol / FLOW_RATE * 60000.0f);
+
+    hp_ms_total = estimate.duration_ms;
     hp_running = 1;
-    
-    // 第一段：开泵
     PumpPort_Set(1U);
     hp_is_on = 1;
     hp_state_start = PumpPort_NowMs();
 }
 
-	
 static uint32_t t_last = 0;
 
 void Bump_Control(void)
