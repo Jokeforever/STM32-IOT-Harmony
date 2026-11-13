@@ -1,6 +1,7 @@
 #include "app_config.h"
 #include "Key.h"
 #include "mw_key_port.h"
+#include "mw_pump_port.h"
 #include "mw_config.h"
 
 extern volatile DisplayScreen CurrentScreen;
@@ -193,7 +194,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 					time_ms = 0;
 					watertime = 0;
 					waterflag = 0;	
-					BUMP_OFF;  // 关闭水泵
+					PumpPort_Set(0U);  // 关闭水泵
 				}
 			}
 			
@@ -205,7 +206,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
             if (hp_is_on) {
                 // 正在开：检查是否到 0.5s
                 if (dur >= HP_ON_MS) {
-                    BUMP_OFF;
+                    PumpPort_Set(0U);
                     hp_is_on = 0;
                     hp_state_start = HAL_GetTick();
                 }
@@ -214,7 +215,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
                 if (dur >= HP_OFF_MS) {
                     // 总时间没到就继续下一轮
                     if (hp_ms_count < hp_ms_total) {
-                        BUMP_ON;
+                        PumpPort_Set(1U);
                         hp_is_on = 1;
                         hp_state_start = HAL_GetTick();
                     }
@@ -227,7 +228,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
                 hp_ms_count = 0;
                 hp_ms_total = 0;
                 hp_is_on = 0;
-								BUMP_OFF;
+								PumpPort_Set(0U);
 								AppConfig_CompletePumpFromISR();
             }
 			

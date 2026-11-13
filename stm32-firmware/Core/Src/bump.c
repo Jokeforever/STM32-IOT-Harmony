@@ -14,6 +14,7 @@
  *   模式变化后会触发 Config_MarkDirty() 保存到 EEPROM。
  */
   #include "bump.h"
+#include "mw_pump_port.h"
   #include "mw_config.h"
 
 extern float water_vol ;
@@ -26,7 +27,7 @@ volatile uint32_t time_ms = 0;
 
 void BUMP_Init(void)
 {
-    BUMP_OFF;
+    PumpPort_Set(0U);
 }
 
 float Calculate_Water_Volume(uint16_t current_humi)
@@ -71,7 +72,7 @@ void Irrigation_Control(void)
     }
     if (water_vol <= 0)
 		{
-        BUMP_OFF;  // 无需灌溉，关闭水泵
+        PumpPort_Set(0U);  // 无需灌溉，关闭水泵
         return;
     }
     // 计算灌溉时间（假设水泵流量为FLOW_RATE L/min）
@@ -79,7 +80,7 @@ void Irrigation_Control(void)
      time_ms = (uint32_t)(time_min * 60000.0f);  // 转换为毫秒
     
 		waterflag = 1;
-		BUMP_ON;  // 开启水泵
+		PumpPort_Set(1U);  // 开启水泵
 	
 }
 	
@@ -100,7 +101,7 @@ void Start_HighPressure_Irrigation(void)
     }
     if (water_vol <= 0)
 		{
-        BUMP_OFF;  // 无需灌溉，关闭水泵
+        PumpPort_Set(0U);  // 无需灌溉，关闭水泵
         return;
     }
 		
@@ -108,7 +109,7 @@ void Start_HighPressure_Irrigation(void)
     hp_running = 1;
     
     // 第一段：开泵
-    BUMP_ON;
+    PumpPort_Set(1U);
     hp_is_on = 1;
     hp_state_start = HAL_GetTick();
 }
@@ -121,7 +122,7 @@ void Bump_Control(void)
 	switch(AppConfig_Get()->bump_mode)
 	{
 		case Bump_OFF:
-						BUMP_OFF;
+						PumpPort_Set(0U);
 						watertime = 0;
 						waterflag = 0;
 						time_ms = 0;

@@ -520,6 +520,11 @@
           <GroupName>modules/app</GroupName>
           <Files>
             <File>
+              <FileName>app_pump_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\modules\app\src\app_pump_port.c</FilePath>
+            </File>
+            <File>
               <FileName>app_climate_port.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\modules\app\src\app_climate_port.c</FilePath>

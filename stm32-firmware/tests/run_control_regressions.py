@@ -75,6 +75,7 @@ header('mw_pid.h', read('modules/middleware/inc/mw_pid.h'))
 header('LED.h', read('Core/Inc/LED.h'))
 header('mw_led_port.h', read('modules/middleware/inc/mw_led_port.h'))
 header('mw_key_port.h', read('modules/middleware/inc/mw_key_port.h'))
+header('mw_pump_port.h', read('modules/middleware/inc/mw_pump_port.h'))
 header('tim.h', '#include \"stm32f1xx_hal.h\"\n')
 header('gpio.h', '#include \"stm32f1xx_hal.h\"\n')
 header('Key.h', '#ifndef MOCK_KEY_H\n#define MOCK_KEY_H\n#include "stm32f1xx_hal.h"\ntypedef struct { uint8_t State, Pin_state, ClickFlag, LongClickFlag; uint32_t Presstime, Releasetime; } Key;\n#define LDR_STEP 100\n#define CO2_STEP 100\n#define TEMP_STEP 1\n#define BUMP_STEP 2\nvoid Key_Func(void);\n#include "LED.h"\n#include "bump.h"\n#endif\n')
@@ -94,11 +95,10 @@ typedef enum { Bump_OFF=0, Bump_CALIBRATION=1, Bump_AUTO=2 } Bump_Mode;
 #define MIN_WATER_VOLUME 0.1f
 void Bump_Set(int mode);
 void BUMP_Init(void);
+void Bump_Control(void);
 #define HUMI_THRESHOLD_HIGH 75
 #include "mw_alarm.h"
 typedef enum { DISPLAY_NONE=0, DISPLAY_SCREEN1, DISPLAY_SCREEN2, DISPLAY_SCREEN3, DISPLAY_SCREEN4, DISPLAY_SCREEN5 } DisplayScreen;
-#define BUMP_ON HAL_GPIO_WritePin(GPIOB,GPIO_PIN_1,GPIO_PIN_SET)
-#define BUMP_OFF HAL_GPIO_WritePin(GPIOB,GPIO_PIN_1,GPIO_PIN_RESET)
 #endif
 ''')
 header('Display.h', '#include \"bump.h\"\n')
@@ -151,6 +151,23 @@ static uint32_t tick;
 static unsigned pwm;
 static unsigned pwm_writes;
 static int pins[3][16];
+static unsigned gpio_writes, last_gpio_mask;
+static int last_gpio_port, last_gpio_value;
+
+static int pump_write_is(unsigned count, int level)
+{
+    return gpio_writes == count && last_gpio_port == GPIOB &&
+           last_gpio_mask == GPIO_PIN_1 && last_gpio_value == level;
+}
+
+static void advance_pump_ticks(unsigned count)
+{
+    TIM_HandleTypeDef timer = {TIM1};
+    for (unsigned i = 0; i < count; ++i) {
+        tick += 10U;
+        HAL_TIM_PeriodElapsedCallback(&timer);
+    }
+}
 static uint8_t eeprom[256];
 static unsigned fail_write,fail_read,corrupt_write;
 static unsigned read_calls,write_calls;
@@ -159,6 +176,10 @@ unsigned inject_completion;
 int _fltused = 0;
 uint32_t HAL_GetTick(void) { return tick; }
 void HAL_GPIO_WritePin(int port, unsigned mask, int value) {
+    ++gpio_writes;
+    last_gpio_port = port;
+    last_gpio_mask = mask;
+    last_gpio_value = value;
     unsigned i; for (i=0;i<16;i++) if (mask & (1U<<i)) pins[port][i]=value;
 }
 void HAL_TIM_PWM_Start(TIM_HandleTypeDef *h, int c) { (void)h; (void)c; }
@@ -533,13 +554,64 @@ int main(void) {
      fail_read=1;CHECK(ConfigPort_Read(0,&byte,1)==0);fail_read=0;
      tick=0xFFFFFFF0U;CHECK(ConfigPort_NowMs()==tick);tick=32;CHECK(ConfigPort_NowMs()==32);
     }
+    /* Exercise the real PB1 adapter through startup, main-loop and TIM1 callers. */
+    AppConfig_Init();
+    gpio_writes = 0;
+    BUMP_Init();
+    CHECK(pump_write_is(1U, GPIO_PIN_RESET));
+    Bump_Control();
+    moist = 70;
+    tick = 0;
+    Bump_Set(Bump_CALIBRATION);
+    gpio_writes = 0;
+    Bump_Control();
+    CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    CHECK(hp_ms_total >= 4990U && hp_ms_total <= 5000U);
+    const uint32_t pulse_ticks = (hp_ms_total + 9U) / 10U;
+    advance_pump_ticks(49U);
+    CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    advance_pump_ticks(1U);
+    CHECK(pump_write_is(2U, GPIO_PIN_RESET));
+    advance_pump_ticks(149U);
+    CHECK(pump_write_is(2U, GPIO_PIN_RESET));
+    advance_pump_ticks(1U);
+    CHECK(pump_write_is(3U, GPIO_PIN_SET));
+    advance_pump_ticks(pulse_ticks - 200U);
+    CHECK(pump_write_is(7U, GPIO_PIN_RESET));
+    CHECK(CurrentBump_mode == Bump_OFF && hp_running == 0U);
+
+    /* Auto mode starts after the existing 30 s gate and stops on its TIM1 boundary. */
+    Bump_Control();
+    Bump_Set(Bump_AUTO);
+    gpio_writes = 0;
+    tick = 30000U;
+    Bump_Control();
+    CHECK(gpio_writes == 0U);
+    ++tick;
+    Bump_Control();
+    CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    CHECK(time_ms >= 4990U && time_ms <= 5000U);
+    advance_pump_ticks(time_ms / 10U);
+    CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    advance_pump_ticks(1U);
+    CHECK(pump_write_is(2U, GPIO_PIN_RESET) && time_ms == 0U && CurrentBump_mode == Bump_AUTO);
+
+    /* Switching an active pump to off writes low before the next timer event. */
+    tick = 60002U;
+    Bump_Control();
+    CHECK(pump_write_is(3U, GPIO_PIN_SET));
+    Bump_Set(Bump_OFF);
+    Bump_Control();
+    CHECK(pump_write_is(4U, GPIO_PIN_RESET) && time_ms == 0U);
+    advance_pump_ticks(1U);
+    CHECK(pump_write_is(4U, GPIO_PIN_RESET));
     return assertions==EXPECTED_ASSERTIONS?0:32000;
 }
 '''
 expected_assertions=harness.count('CHECK(')-1+51
 harness=harness.replace('EXPECTED_ASSERTIONS',str(expected_assertions))
 (OUT / 'test.c').write_text(harness, encoding='utf-8')
-source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c','modules/app/src/app_key_port.c','modules/middleware/src/mw_climate.c','modules/app/src/app_climate_port.c','modules/middleware/src/mw_alarm.c','modules/app/src/app_alarm_port.c']
+source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_pump_port.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c','modules/app/src/app_key_port.c','modules/middleware/src/mw_climate.c','modules/app/src/app_climate_port.c','modules/middleware/src/mw_alarm.c','modules/app/src/app_alarm_port.c']
 sources = []
 for rel in source_rel:
     p = OUT / Path(rel).name

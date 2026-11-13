@@ -4,13 +4,6 @@
 #include "TS.h"
 #include "oled.h"
 
-#define BUMP_GPIO_PIN 				GPIO_PIN_1
-
-#define BUMP_GPIO_PROT 				GPIOB
-
-#define BUMP_ON 		 HAL_GPIO_WritePin(BUMP_GPIO_PROT,BUMP_GPIO_PIN,GPIO_PIN_SET)
-#define BUMP_OFF 	 	HAL_GPIO_WritePin(BUMP_GPIO_PROT,BUMP_GPIO_PIN,GPIO_PIN_RESET)
-
 
 #define HUMI_THRESHOLD_LOW  30  // 干旱阈值（%RH）
 #define HUMI_THRESHOLD_HIGH 75  // 湿润阈值（%RH）

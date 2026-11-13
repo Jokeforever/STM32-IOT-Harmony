@@ -114,6 +114,7 @@ int main(void){
     used = 0;
     MX_GPIO_Init();
     CHECK(climate_mode == GPIO_MODE_OUTPUT_PP);
+    CHECK(writes_at_climate_mode > 2U && wrote(2, GPIO_PIN_1, GPIO_PIN_RESET));
     CHECK(writes_at_climate_mode > 3U && wrote(3, GPIO_PIN_5 | GPIO_PIN_6, GPIO_PIN_SET));
 
     /* Hardware_Init calls these in heater-then-fan order. */
