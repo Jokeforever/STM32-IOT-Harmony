@@ -7,3 +7,8 @@ void PumpPort_Set(uint8_t active)
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1,
                       active != 0U ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
+
+uint32_t PumpPort_NowMs(void)
+{
+    return HAL_GetTick();
+}

@@ -111,7 +111,7 @@ void Start_HighPressure_Irrigation(void)
     // 第一段：开泵
     PumpPort_Set(1U);
     hp_is_on = 1;
-    hp_state_start = HAL_GetTick();
+    hp_state_start = PumpPort_NowMs();
 }
 
 	
@@ -143,8 +143,8 @@ void Bump_Control(void)
 						hp_ms_count = 0;
 						hp_ms_total = 0;
 						hp_is_on =0;
-        if (HAL_GetTick() - t_last > 30000) {
-            t_last = HAL_GetTick();
+        if (PumpPort_NowMs() - t_last > 30000) {
+            t_last = PumpPort_NowMs();
 					Irrigation_Control();
 				}				
 						break;
@@ -163,18 +163,18 @@ void Bump_OnTimerTick(void)
         }
     } else if (hp_running && AppConfig_Get()->bump_mode == Bump_CALIBRATION) {
         hp_ms_count++;
-        const uint32_t elapsed = HAL_GetTick() - hp_state_start;
+        const uint32_t elapsed = PumpPort_NowMs() - hp_state_start;
 
         if (hp_is_on) {
             if (elapsed >= HP_ON_MS) {
                 PumpPort_Set(0U);
                 hp_is_on = 0;
-                hp_state_start = HAL_GetTick();
+                hp_state_start = PumpPort_NowMs();
             }
         } else if (elapsed >= HP_OFF_MS && hp_ms_count < hp_ms_total) {
             PumpPort_Set(1U);
             hp_is_on = 1;
-            hp_state_start = HAL_GetTick();
+            hp_state_start = PumpPort_NowMs();
         }
 
         if (hp_ms_count * 10U >= hp_ms_total) {

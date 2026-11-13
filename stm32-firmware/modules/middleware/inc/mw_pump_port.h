@@ -12,6 +12,9 @@ extern "C" {
  */
 void PumpPort_Set(uint8_t active);
 
+/* 主循环和定时器中断可读取的 32 位毫秒计数，溢出时回到 0。 */
+uint32_t PumpPort_NowMs(void);
+
 #ifdef __cplusplus
 }
 #endif

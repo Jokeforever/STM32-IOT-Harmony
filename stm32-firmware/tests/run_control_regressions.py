@@ -640,6 +640,39 @@ int main(void) {
     CHECK(pump_write_is(1U, GPIO_PIN_SET));
     advance_pump_ticks(1U);
     CHECK(pump_write_is(2U, GPIO_PIN_RESET) && CurrentBump_mode == Bump_AUTO);
+    /* Start a pulse 500 ms before the millisecond counter wraps. */
+    Bump_Set(Bump_OFF);
+    Bump_Control();
+    tick = UINT32_MAX - 499U;
+    Bump_Set(Bump_CALIBRATION);
+    gpio_writes = 0;
+    Bump_Control();
+    CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    advance_pump_ticks(49U);
+    CHECK(tick == UINT32_MAX - 9U && pump_write_is(1U, GPIO_PIN_SET));
+    advance_pump_ticks(1U);
+    CHECK(tick == 0U && pump_write_is(2U, GPIO_PIN_RESET));
+    advance_pump_ticks(149U);
+    CHECK(tick == 1490U && pump_write_is(2U, GPIO_PIN_RESET));
+    advance_pump_ticks(1U);
+    CHECK(tick == 1500U && pump_write_is(3U, GPIO_PIN_SET));
+
+    /* Repeat the automatic start boundary with the saved check time before wrap. */
+    Bump_Set(Bump_OFF);
+    Bump_Control();
+    Bump_Set(Bump_AUTO);
+    tick = UINT32_MAX - 29999U;
+    gpio_writes = 0;
+    Bump_Control();
+    CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    advance_pump_ticks(681U);
+    CHECK(pump_write_is(2U, GPIO_PIN_RESET));
+    tick = 0U;
+    Bump_Control();
+    CHECK(gpio_writes == 2U);
+    tick = 1U;
+    Bump_Control();
+    CHECK(pump_write_is(3U, GPIO_PIN_SET));
     return assertions==EXPECTED_ASSERTIONS?0:32000;
 }
 '''
