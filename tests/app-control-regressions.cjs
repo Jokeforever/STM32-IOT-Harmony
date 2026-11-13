@@ -48,8 +48,8 @@ function makeHost() {
   const page = source('pages/DeviceDetail.ets');
   const names = ['aboutToDisappear', 'autoRefreshTask', 'refreshData', 'refresh', 'readControlRequests',
     'writeControlRequests', 'stopControlConfirmation', 'ensureControlConfirmation', 'controlOnline', 'controlEnabled',
-    'pendingTarget', 'controlAttention', 'controlText', 'sendControl', 'setLedMode', 'setBumpMode', 'getThresholdMin',
-    'getThresholdMax', 'adjustThreshold', 'formatTime', 'pad'];
+    'pendingTarget', 'controlAttention', 'controlText', 'sendControl', 'setLedMode', 'setBumpMode',
+    'thresholdPeer', 'thresholdRange', 'thresholdEditable', 'thresholdDraftValue', 'editThreshold', 'applyThreshold', 'formatTime', 'pad'];
   const methods = names.map(name => method(page, name)).join('\n');
   const storage = { get: key => state.storage.get(key), setOrCreate: (key, value) => state.storage.set(key, value) };
   const { Host } = load(`export class Host { ${methods} }`, {
@@ -60,6 +60,7 @@ function makeHost() {
   });
   const host = new Host();
   Object.assign(host, { pageActive: true, pageGeneration: 1, loading: false, online: true,
+    thresholdEditorId: '', thresholdDraft: '',
     properties: props(), controlRequests: [], confirmationTimer: -1, ledMode: 0, bumpMode: 0,
     temperature: 0, humidity: 0, lastReportTime: t - 1000, lastSyncTime: '--', errorMessage: '', autoRefresh: true,
     saveCount: 0, saveCachedState() { this.saveCount++; }, stopAutoRefresh() { this.autoStopped = true; } });
@@ -220,7 +221,8 @@ async function main() {
   });
   await scenario('page confirms threshold without fabricating property value', async () => {
     const { host, calls, tick } = makeHost(); host.properties = [...props('20', t - 1000, 'tempthrehold'), ...props('10', t - 1000, 'temp_low_threshold')];
-    calls.query = async () => props('20', t - 1000, 'tempthrehold'); await host.adjustThreshold('tempthrehold', 1);
+    calls.query = async () => props('20', t - 1000, 'tempthrehold'); host.editThreshold('tempthrehold'); host.thresholdDraft = '21';
+    await host.applyThreshold('tempthrehold');
     eq(host.properties[0].value, '20'); eq(host.controlRequests[0].target, 21);
     calls.query = async () => props('21', t, 'tempthrehold'); await tick();
     eq(host.properties[0].value, '21'); eq(host.controlRequests[0].phase, P.MATCHED);
@@ -277,19 +279,69 @@ async function main() {
     eq(models.PropertyHelper.getUnit('temp_low_threshold'), '℃');
     yes(models.PropertyHelper.isKnownProperty('temp_low_threshold')); yes(T.supported('temp_low_threshold'));
   });
-  await scenario('temperature pair client rejects crossing or missing peer', async () => {
+  await scenario('threshold draft can jump to an exact value and sends only on apply', async () => {
     const { host, calls } = makeHost();
-    host.properties = [...props('30', t - 1000, 'tempthrehold'), ...props('29', t - 1000, 'temp_low_threshold')];
-    await host.adjustThreshold('temp_low_threshold', 1); eq(calls.posts.length, 0); yes(host.errorMessage.includes('下限必须小于'));
-    await host.adjustThreshold('tempthrehold', -1); eq(calls.posts.length, 0);
-    host.properties = props('30', t - 1000, 'tempthrehold'); await host.adjustThreshold('tempthrehold', 1);
-    eq(calls.posts.length, 0); yes(host.errorMessage.includes('两个温度阈值'));
+    host.properties = props('2000', t - 1000, 'CO2threhold');
+    host.editThreshold('CO2threhold');
+    eq(host.thresholdEditorId, 'CO2threhold'); eq(host.thresholdDraft, '2000');
+    eq(host.thresholdRange('CO2threhold'), { min: 350, max: 4000 });
+    for (const draft of ['', '349', '4001', '1750.5', '2e3', '2000']) {
+      host.thresholdDraft = draft;
+      await host.applyThreshold('CO2threhold');
+    }
+    eq(calls.posts, []);
+    host.thresholdDraft = '1777';
+    eq(host.thresholdDraftValue(), 1777); eq(calls.posts, []);
+    calls.query = async () => props('2000', t - 1000, 'CO2threhold');
+    await Promise.all([host.applyThreshold('CO2threhold'), host.applyThreshold('CO2threhold')]);
+    eq(calls.posts, [['CO2threhold', 1777]]);
+    eq(host.thresholdEditorId, '');
+    eq(host.properties[0].value, '2000'); eq(host.controlRequests[0].target, 1777);
+  });
+  await scenario('temperature range requires peer and rejects stale draft after refresh', async () => {
+    const { host, calls } = makeHost();
+    host.properties = props('30', t - 1000, 'tempthrehold');
+    host.editThreshold('tempthrehold'); eq(host.thresholdEditorId, '');
+    host.properties = [...host.properties, ...props('20', t - 1000, 'temp_low_threshold')];
+    eq(host.thresholdRange('tempthrehold'), { min: 21, max: 100 });
+    eq(host.thresholdRange('temp_low_threshold'), { min: 0, max: 29 });
+    host.editThreshold('tempthrehold'); host.thresholdDraft = '25';
+    host.properties = [host.properties[0], ...props('25', t, 'temp_low_threshold')];
+    eq(host.thresholdRange('tempthrehold'), { min: 26, max: 100 });
+    await host.applyThreshold('tempthrehold'); eq(calls.posts, []);
+    eq(host.thresholdDraft, '25'); eq(host.thresholdEditorId, 'tempthrehold');
+  });
+  await scenario('soil ranges allow equality and block edits while the peer is awaiting a report', async () => {
+    const { host, calls } = makeHost();
+    host.properties = [...props('25', t - 1000, 'droughtthrehold'), ...props('80', t - 1000, 'moistthrehold')];
+    eq(host.thresholdRange('droughtthrehold'), { min: 0, max: 80 });
+    eq(host.thresholdRange('moistthrehold'), { min: 25, max: 100 });
+    host.editThreshold('droughtthrehold'); host.thresholdDraft = '81';
+    await host.applyThreshold('droughtthrehold'); eq(calls.posts, []);
+    host.thresholdDraft = '80';
+    calls.query = async () => host.properties;
+    await host.applyThreshold('droughtthrehold');
+    eq(calls.posts, [['droughtthrehold', 80]]); eq(host.controlRequests[0].phase, P.WAITING);
+    eq(host.thresholdEditable('moistthrehold'), false);
+    host.editThreshold('moistthrehold'); eq(host.thresholdEditorId, '');
+  });
+  await scenario('threshold editor cannot send after cancellation or while the device is offline', async () => {
+    const { host, calls } = makeHost();
+    host.properties = props('2000', t - 1000, 'CO2threhold');
+    host.editThreshold('CO2threhold'); host.thresholdDraft = '1900';
+    host.thresholdEditorId = '';
+    await host.applyThreshold('CO2threhold');
+    host.editThreshold('CO2threhold'); eq(host.thresholdDraft, '2000');
+    host.thresholdDraft = '1900'; host.online = false;
+    await host.applyThreshold('CO2threhold'); eq(calls.posts, []);
+    eq(host.thresholdEditorId, 'CO2threhold');
   });
   await scenario('lower temperature uses existing confirmation and actual report', async () => {
     const { host, calls } = makeHost();
     host.properties = [...props('30', t - 1000, 'tempthrehold'), ...props('20', t - 1000, 'temp_low_threshold')];
     calls.query = async () => [...props('30', t, 'tempthrehold'), ...props('21', t, 'temp_low_threshold')];
-    await host.adjustThreshold('temp_low_threshold', 1);
+    host.editThreshold('temp_low_threshold'); host.thresholdDraft = '21';
+    await host.applyThreshold('temp_low_threshold');
     eq(calls.posts, [['temp_low_threshold', 21]]); eq(host.controlRequests[0].phase, P.MATCHED);
   });
   console.log('PASS:', scenarios, 'control scenarios,', checks, 'checks. Production tracker/API/page methods; no network, credentials or ArkUI runtime.');

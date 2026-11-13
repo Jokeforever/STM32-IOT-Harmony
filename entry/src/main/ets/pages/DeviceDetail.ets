@@ -58,46 +58,100 @@ struct DetailModeButton {
   }
 }
 
+interface ThresholdSpec {
+  identifier: string;
+  label: string;
+}
+
+interface ThresholdRange {
+  min: number;
+  max: number;
+}
+
+const THRESHOLDS: ThresholdSpec[] = [
+  { identifier: 'CO2threhold', label: 'CO₂ 阈值' },
+  { identifier: 'droughtthrehold', label: '干旱阈值' },
+  { identifier: 'moistthrehold', label: '湿润阈值' },
+  { identifier: 'tempthrehold', label: '通风温度上限' },
+  { identifier: 'temp_low_threshold', label: '加热温度下限' }
+];
+
 @Component
-struct ThresholdStepper {
+struct ThresholdSlider {
   @Prop label: string = '';
   @Prop valueText: string = '--';
   @Prop unit: string = '';
+  @Prop range: ThresholdRange = { min: 0, max: -1 };
+  @Prop editing: boolean = false;
+  @Prop editable: boolean = false;
+  @Prop draft: string = '';
+  @Prop candidate: number = -1;
   @Prop feedback: string = '';
   @Prop attention: boolean = false;
-  @Prop buttonEnabled: boolean = true;
-  onDecrease?: () => void;
-  onIncrease?: () => void;
+  onEdit: () => void = () => {};
+  onCancel: () => void = () => {};
+  onDraftChange: (draft: string) => void = () => {};
+  onApply: () => void = () => {};
+
+  private validCandidate(): boolean {
+    return this.candidate >= this.range.min && this.candidate <= this.range.max;
+  }
+
+  private sliderValue(): number {
+    const value = this.candidate >= 0 ? this.candidate : Number(this.valueText);
+    return Number.isFinite(value) ? Math.max(this.range.min, Math.min(this.range.max, value)) : this.range.min;
+  }
 
   build() {
-    Row({ space: 12 }) {
-      Column({ space: 6 }) {
-        Text(this.label).fontSize(13).fontColor(AppTheme.secondary)
-        Text(this.valueText === '--' ? '--' : this.valueText + ' ' + this.unit)
-          .fontSize(18).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        ControlFeedback({ text: this.feedback, attention: this.attention })
-      }
-      .layoutWeight(1).alignItems(HorizontalAlign.Start)
-      Row({ space: 8 }) {
-        Button({ type: ButtonType.Normal }) {
-          Text('−').fontSize(27).fontWeight(FontWeight.Medium).fontColor(AppTheme.primary)
+    Column({ space: 9 }) {
+      Row({ space: 12 }) {
+        Column({ space: 5 }) {
+          Text(this.label).fontSize(13).fontColor(AppTheme.secondary)
+          Text(this.valueText === '--' ? '--' : this.valueText + ' ' + this.unit)
+            .fontSize(18).fontWeight(FontWeight.Medium).fontColor(AppTheme.ink)
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        Button(this.editing ? '取消' : '调整')
+          .fontSize(14).fontColor(AppTheme.primary).height(44)
+          .padding({ left: 16, right: 16 }).borderRadius(14)
+          .backgroundColor(AppTheme.pale).enabled(this.editing || this.editable)
+          .accessibilityText(this.label + (this.editing ? '取消调整' : '调整'))
+          .onClick(() => { if (this.editing) { this.onCancel(); } else { this.onEdit(); } })
+      }.width('100%')
+
+      if (this.editing) {
+        if (this.range.min < this.range.max) {
+          Slider({ value: this.sliderValue(), min: this.range.min, max: this.range.max, step: 1 })
+            .width('100%').height(44).selectedColor(AppTheme.primary).trackColor(AppTheme.border)
+            .accessibilityText(this.label)
+            .onChange((value: number) => { this.onDraftChange(Math.round(value).toString()); })
         }
-        .width(44).height(44).padding(0).borderRadius(14)
-        .backgroundColor(AppTheme.pale).enabled(this.buttonEnabled)
-        .accessibilityText(this.label + '减少')
-        .onClick(() => { if (this.onDecrease) { this.onDecrease(); } })
-        Button({ type: ButtonType.Normal }) {
-          Text('+').fontSize(27).fontWeight(FontWeight.Medium).fontColor(Color.White)
+        if (this.range.min <= this.range.max) {
+          Row() {
+            Text(this.range.min.toString() + ' ' + this.unit).fontSize(12).fontColor(AppTheme.secondary)
+            Text(this.range.max.toString() + ' ' + this.unit).fontSize(12).fontColor(AppTheme.secondary)
+          }.width('100%').justifyContent(FlexAlign.SpaceBetween)
         }
-        .width(44).height(44).padding(0).borderRadius(14)
-        .backgroundColor(AppTheme.primary).enabled(this.buttonEnabled)
-        .accessibilityText(this.label + '增加')
-        .onClick(() => { if (this.onIncrease) { this.onIncrease(); } })
+        Row({ space: 8 }) {
+          TextInput({ text: this.draft, placeholder: '输入目标值' })
+            .type(InputType.Number).maxLength(4).fontSize(16).height(44).layoutWeight(1)
+            .fontColor(AppTheme.ink).backgroundColor(AppTheme.pale).borderRadius(12)
+            .accessibilityText(this.label + '目标值')
+            .onChange((value: string) => { this.onDraftChange(value); })
+          Text(this.unit).fontSize(13).fontColor(AppTheme.secondary)
+          Button('应用').fontSize(14).fontColor(Color.White).height(44)
+            .padding({ left: 16, right: 16 }).borderRadius(14).backgroundColor(AppTheme.primary)
+            .enabled(this.editable && this.validCandidate() && this.candidate !== Number(this.valueText))
+            .onClick(() => { this.onApply(); })
+        }.width('100%')
+        if (this.range.min > this.range.max) {
+          Text('请先同步相关阈值').fontSize(12).fontColor(AppTheme.secondary)
+        } else if (this.draft !== '' && !this.validCandidate()) {
+          Text('请输入范围内的整数').fontSize(12).fontColor(AppTheme.amber)
+        }
       }
-      .width(96)
+      ControlFeedback({ text: this.feedback, attention: this.attention })
     }
-    .width('100%').padding({ top: 14, bottom: 14 })
+    .width('100%').alignItems(HorizontalAlign.Start).padding({ top: 10, bottom: 10 })
   }
 }
 
@@ -147,10 +201,13 @@ export struct DeviceDetail {
   @State trendMetric: number = 0;
   @State trendAutoFit: boolean = true;
   @State controlRequests: ControlRequest[] = [];
+  @State thresholdEditorId: string = '';
+  @State thresholdDraft: string = '';
 
   aboutToDisappear(): void {
     this.pageActive = false;
     this.pageGeneration++;
+    this.thresholdEditorId = '';
     this.stopAutoRefresh();
     this.stopControlConfirmation();
   }
@@ -442,34 +499,60 @@ export struct DeviceDetail {
 
 
 
-  private getThresholdMin(identifier: string): number {
-    return identifier === 'CO2threhold' ? 350 : (identifier === 'tempthrehold' ? 1 : 0);
-  }
-
-  private getThresholdMax(identifier: string): number {
-    return identifier === 'CO2threhold' ? 4000 : (identifier === 'temp_low_threshold' ? 99 : 100);
-  }
-
-
-
-  private async adjustThreshold(identifier: string, delta: number): Promise<void> {
-    if (this.loading || ControlTracker.busy(this.readControlRequests(), identifier)) { return; }
-    const raw = PropertyHelper.getValue(this.properties, identifier);
-    const current = Number(raw);
-    if (raw.trim() === '' || !Number.isInteger(current)) { this.errorMessage = '尚未取得有效阈值，请先刷新'; return; }
-    const next = Math.max(this.getThresholdMin(identifier), Math.min(this.getThresholdMax(identifier), current + delta));
-    if (identifier === 'tempthrehold' || identifier === 'temp_low_threshold') {
-      const peerKey = identifier === 'tempthrehold' ? 'temp_low_threshold' : 'tempthrehold';
-      const peerRaw = PropertyHelper.getValue(this.properties, peerKey);
-      const peer = Number(peerRaw);
-      if (peerRaw.trim() === '' || !Number.isInteger(peer)) {
-        this.errorMessage = '请先同步两个温度阈值，并确认OneNET已添加加热温度下限属性'; return;
-      }
-      if ((identifier === 'tempthrehold' && next <= peer) || (identifier === 'temp_low_threshold' && next >= peer)) {
-        this.errorMessage = '加热温度下限必须小于通风温度上限'; return;
-      }
+  private thresholdPeer(identifier: string): string {
+    switch (identifier) {
+      case 'droughtthrehold': return 'moistthrehold';
+      case 'moistthrehold': return 'droughtthrehold';
+      case 'tempthrehold': return 'temp_low_threshold';
+      case 'temp_low_threshold': return 'tempthrehold';
+      default: return '';
     }
-    if (next !== current) { await this.sendControl(identifier, next); }
+  }
+
+  private thresholdRange(identifier: string): ThresholdRange {
+    if (identifier === 'CO2threhold') {
+      return { min: 350, max: 4000 };
+    }
+    const peerKey = this.thresholdPeer(identifier);
+    const raw = PropertyHelper.getValue(this.properties, peerKey);
+    const peer = Number(raw);
+    if (peerKey === '' || raw.trim() === '' || !Number.isInteger(peer) || peer < 0 || peer > 100) {
+      return { min: 0, max: -1 };
+    }
+    switch (identifier) {
+      case 'droughtthrehold': return { min: 0, max: peer };
+      case 'moistthrehold': return { min: peer, max: 100 };
+      case 'tempthrehold': return { min: peer + 1, max: 100 };
+      case 'temp_low_threshold': return { min: 0, max: peer - 1 };
+      default: return { min: 0, max: -1 };
+    }
+  }
+
+  private thresholdEditable(identifier: string): boolean {
+    const range = this.thresholdRange(identifier);
+    const peer = this.thresholdPeer(identifier);
+    return range.min <= range.max && this.controlEnabled(identifier) &&
+      (peer === '' || !ControlTracker.busy(this.controlRequests, peer));
+  }
+
+  private thresholdDraftValue(): number {
+    return /^\d+$/.test(this.thresholdDraft) ? Number(this.thresholdDraft) : -1;
+  }
+
+  private editThreshold(identifier: string): void {
+    if (!this.thresholdEditable(identifier)) { return; }
+    this.thresholdDraft = PropertyHelper.getValue(this.properties, identifier);
+    this.thresholdEditorId = identifier;
+  }
+
+  private async applyThreshold(identifier: string): Promise<void> {
+    if (this.thresholdEditorId !== identifier || !this.thresholdEditable(identifier)) { return; }
+    const range = this.thresholdRange(identifier);
+    const target = this.thresholdDraftValue();
+    const current = Number(PropertyHelper.getValue(this.properties, identifier));
+    if (!Number.isInteger(target) || target < range.min || target > range.max || target === current) { return; }
+    this.thresholdEditorId = '';
+    await this.sendControl(identifier, target);
   }
 
   private buildResult(): DeviceDetailParam {
@@ -669,37 +752,24 @@ export struct DeviceDetail {
           }
           .width('100%').padding(18).margin({ bottom: 12 })
           .backgroundColor(AppTheme.surface).border({ width: 1, color: AppTheme.border }).borderRadius(22)
-          SectionHeading({ title: '阈值设置', caption: '显示设备最近上报值' })
+          SectionHeading({ title: '阈值设置', caption: '调整后点应用' })
           Column() {
-            ThresholdStepper({ label: 'CO₂ 阈值', valueText: this.getDisplayValue('CO2threhold'),
-              unit: this.getUnit('CO2threhold'), buttonEnabled: this.controlEnabled('CO2threhold'),
-              feedback: this.controlText('CO2threhold'), attention: this.controlAttention('CO2threhold'),
-              onDecrease: () => { this.adjustThreshold('CO2threhold', -100); },
-              onIncrease: () => { this.adjustThreshold('CO2threhold', 100); } })
-            Divider().color(AppTheme.border)
-            ThresholdStepper({ label: '干旱阈值', valueText: this.getDisplayValue('droughtthrehold'),
-              unit: this.getUnit('droughtthrehold'), buttonEnabled: this.controlEnabled('droughtthrehold'),
-              feedback: this.controlText('droughtthrehold'), attention: this.controlAttention('droughtthrehold'),
-              onDecrease: () => { this.adjustThreshold('droughtthrehold', -1); },
-              onIncrease: () => { this.adjustThreshold('droughtthrehold', 1); } })
-            Divider().color(AppTheme.border)
-            ThresholdStepper({ label: '湿润阈值', valueText: this.getDisplayValue('moistthrehold'),
-              unit: this.getUnit('moistthrehold'), buttonEnabled: this.controlEnabled('moistthrehold'),
-              feedback: this.controlText('moistthrehold'), attention: this.controlAttention('moistthrehold'),
-              onDecrease: () => { this.adjustThreshold('moistthrehold', -1); },
-              onIncrease: () => { this.adjustThreshold('moistthrehold', 1); } })
-            Divider().color(AppTheme.border)
-            ThresholdStepper({ label: '通风温度上限', valueText: this.getDisplayValue('tempthrehold'),
-              unit: this.getUnit('tempthrehold'), buttonEnabled: this.controlEnabled('tempthrehold'),
-              feedback: this.controlText('tempthrehold'), attention: this.controlAttention('tempthrehold'),
-              onDecrease: () => { this.adjustThreshold('tempthrehold', -1); },
-              onIncrease: () => { this.adjustThreshold('tempthrehold', 1); } })
-            Divider().color(AppTheme.border).margin({ top: 8, bottom: 8 })
-            ThresholdStepper({ label: '加热温度下限', valueText: this.getDisplayValue('temp_low_threshold'),
-              unit: this.getUnit('temp_low_threshold'), buttonEnabled: this.controlEnabled('temp_low_threshold'),
-              feedback: this.controlText('temp_low_threshold'), attention: this.controlAttention('temp_low_threshold'),
-              onDecrease: () => { this.adjustThreshold('temp_low_threshold', -1); },
-              onIncrease: () => { this.adjustThreshold('temp_low_threshold', 1); } })
+            ForEach(THRESHOLDS, (spec: ThresholdSpec, index: number) => {
+              if (index > 0) {
+                Divider().color(AppTheme.border)
+              }
+              ThresholdSlider({ label: spec.label, valueText: this.getDisplayValue(spec.identifier),
+                unit: this.getUnit(spec.identifier), range: this.thresholdRange(spec.identifier),
+                editing: this.thresholdEditorId === spec.identifier, editable: this.thresholdEditable(spec.identifier),
+                draft: this.thresholdDraft, candidate: this.thresholdDraftValue(),
+                feedback: this.controlText(spec.identifier), attention: this.controlAttention(spec.identifier),
+                onEdit: () => { this.editThreshold(spec.identifier); },
+                onCancel: () => { this.thresholdEditorId = ''; },
+                onDraftChange: (value: string) => {
+                  if (this.thresholdEditorId === spec.identifier) { this.thresholdDraft = value; }
+                },
+                onApply: () => { this.applyThreshold(spec.identifier); } })
+            }, (spec: ThresholdSpec) => spec.identifier)
             Text('温度控制回差1℃；低温与CO₂超限时允许同时加热、通风。')
               .fontSize(11).fontColor(AppTheme.secondary).margin({ top: 10 })
           }
