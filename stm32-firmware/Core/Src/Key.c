@@ -1,27 +1,10 @@
 #include "app_config.h"
 #include "Key.h"
 #include "mw_key_port.h"
-#include "mw_pump_port.h"
 #include "mw_config.h"
 
 extern volatile DisplayScreen CurrentScreen;
 //extern   uint8_t Key1,Key2 ;
-
-extern uint32_t watertime;
-extern uint8_t waterflag; 
-extern volatile uint32_t time_ms;
-
-extern volatile uint32_t hp_ms_total ;       // 本次高压总时长
-extern volatile uint32_t hp_ms_count;      // 已运行时长
-extern volatile uint8_t hp_running ;        // 是否正在高压模式
-extern volatile uint8_t hp_is_on;          // 当前水泵开/关（0=关,1=开）
-extern volatile uint32_t hp_state_start ;   // 当前状态开始时刻
-extern uint32_t HP_ON_MS ;                 // 高压开 0.5s
-extern uint32_t HP_OFF_MS ;              // 高压关 1.5s
- 
-
-
-
 
 extern Key Keys[4];
 uint8_t Monitor_para1 = 0; /* 参数页4：0光照下限、1光照上限、2通风上限、6加热下限；页5：3土壤下限、4上限、5 CO2。 */
@@ -181,57 +164,10 @@ void Key_Func(void)
 }
 
 
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) 
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-	if(htim->Instance == TIM1)
-	{
-				Key_Scan();
-				if(waterflag && AppConfig_Get()->bump_mode == Bump_AUTO)
-			{
-				watertime++;
-				if(watertime*10>time_ms)  // 灌溉指定时间
-				{
-					time_ms = 0;
-					watertime = 0;
-					waterflag = 0;	
-					PumpPort_Set(0U);  // 关闭水泵
-				}
-			}
-			
-			else	if (hp_running && AppConfig_Get()->bump_mode == Bump_CALIBRATION) {
-            hp_ms_count++; // 总时间累计
-            
-            uint32_t dur = HAL_GetTick() - hp_state_start;
-            
-            if (hp_is_on) {
-                // 正在开：检查是否到 0.5s
-                if (dur >= HP_ON_MS) {
-                    PumpPort_Set(0U);
-                    hp_is_on = 0;
-                    hp_state_start = HAL_GetTick();
-                }
-            } else {
-                // 正在关：检查是否到 1.5s
-                if (dur >= HP_OFF_MS) {
-                    // 总时间没到就继续下一轮
-                    if (hp_ms_count < hp_ms_total) {
-                        PumpPort_Set(1U);
-                        hp_is_on = 1;
-                        hp_state_start = HAL_GetTick();
-                    }
-                }
-            }
-            
-            // 高压总时间到
-            if (hp_ms_count*10 >= hp_ms_total) {
-                hp_running = 0;
-                hp_ms_count = 0;
-                hp_ms_total = 0;
-                hp_is_on = 0;
-								PumpPort_Set(0U);
-								AppConfig_CompletePumpFromISR();
-            }
-			
-					}
-	}
+    if (htim->Instance == TIM1) {
+        Key_Scan();
+        Bump_OnTimerTick();
+    }
 }

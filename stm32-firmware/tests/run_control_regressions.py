@@ -96,6 +96,7 @@ typedef enum { Bump_OFF=0, Bump_CALIBRATION=1, Bump_AUTO=2 } Bump_Mode;
 void Bump_Set(int mode);
 void BUMP_Init(void);
 void Bump_Control(void);
+void Bump_OnTimerTick(void);
 #define HUMI_THRESHOLD_HIGH 75
 #include "mw_alarm.h"
 typedef enum { DISPLAY_NONE=0, DISPLAY_SCREEN1, DISPLAY_SCREEN2, DISPLAY_SCREEN3, DISPLAY_SCREEN4, DISPLAY_SCREEN5 } DisplayScreen;
@@ -138,8 +139,6 @@ const SensorData *SensorService_GetData(void) { return &test_data; }
 #define moist test_data.soil_moisture_pct
 #define light test_data.light_lux
 float water_vol;
-extern volatile uint32_t time_ms, hp_ms_total, hp_ms_count, hp_state_start;
-extern volatile uint8_t hp_running, hp_is_on;
 extern uint8_t Monitor_para1;
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 #define temp_threhold (AppConfig_Get()->temp_threshold)
@@ -153,6 +152,8 @@ static unsigned pwm_writes;
 static int pins[3][16];
 static unsigned gpio_writes, last_gpio_mask;
 static int last_gpio_port, last_gpio_value;
+static uint8_t mode_at_pump_write;
+static int previous_pump_level;
 
 static int pump_write_is(unsigned count, int level)
 {
@@ -180,6 +181,10 @@ void HAL_GPIO_WritePin(int port, unsigned mask, int value) {
     last_gpio_port = port;
     last_gpio_mask = mask;
     last_gpio_value = value;
+    if (port == GPIOB && mask == GPIO_PIN_1) {
+        mode_at_pump_write = AppConfig_Get()->bump_mode;
+        previous_pump_level = pins[GPIOB][1];
+    }
     unsigned i; for (i=0;i<16;i++) if (mask & (1U<<i)) pins[port][i]=value;
 }
 void HAL_TIM_PWM_Start(TIM_HandleTypeDef *h, int c) { (void)h; (void)c; }
@@ -350,10 +355,24 @@ int main(void) {
     LED_Set(2);Keys[2].ClickFlag=1;Keys[2].LongClickFlag=1;Key_Func();CHECK(AppConfig_Get()->led_mode==1);
     Keys[2].ClickFlag=1;Keys[2].LongClickFlag=1;Key_Func();CHECK(AppConfig_Get()->led_mode==2);
     /* Real timer completion updates only the pulse mode, with no dirty/timer side effect. */
-    Bump_Set(1);tick+=1000;Config_Process();CHECK(Config_IsDirty()==0);
-    hp_running=1;hp_ms_count=0;hp_ms_total=10;hp_is_on=1;hp_state_start=tick;
-    {TIM_HandleTypeDef timer={TIM1};HAL_TIM_PeriodElapsedCallback(&timer);}
-    CHECK(CurrentBump_mode==0);CHECK(Config_IsDirty()==0);CHECK(hp_running==0);
+    Bump_Set(Bump_OFF);
+    Bump_Control();
+    (void)AppConfig_Set(APP_CFG_SOIL_LOW, 25);
+    (void)AppConfig_Set(APP_CFG_SOIL_HIGH, 42);
+    moist = 0;
+    Bump_Set(Bump_CALIBRATION);
+    tick += 1000U;
+    Config_Process();
+    CHECK(Config_IsDirty() == 0U);
+    gpio_writes = 0;
+    Bump_Control();
+    CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    /* 0.136 L at 1.2 L/min gives an exact 6800 ms boundary in the host build. */
+    advance_pump_ticks(679U);
+    CHECK(CurrentBump_mode == Bump_CALIBRATION && pump_write_is(8U, GPIO_PIN_RESET));
+    advance_pump_ticks(1U);
+    CHECK(pump_write_is(9U, GPIO_PIN_RESET) && mode_at_pump_write == Bump_CALIBRATION);
+    CHECK(CurrentBump_mode == Bump_OFF && Config_IsDirty() == 0U);
     Bump_Set(2);AppConfig_CompletePumpFromISR();CHECK(CurrentBump_mode==2);Bump_Set(0);
     Bump_Set(1);tick+=1000;Config_Process();inject_completion=1;Bump_Set(1);
     CHECK(CurrentBump_mode==1);CHECK(Config_IsDirty()!=0);CHECK(mock_irq_mask==0);
@@ -560,14 +579,14 @@ int main(void) {
     BUMP_Init();
     CHECK(pump_write_is(1U, GPIO_PIN_RESET));
     Bump_Control();
-    moist = 70;
+    (void)AppConfig_Set(APP_CFG_SOIL_LOW, 25);
+    (void)AppConfig_Set(APP_CFG_SOIL_HIGH, 80);
+    moist = 0;
     tick = 0;
     Bump_Set(Bump_CALIBRATION);
     gpio_writes = 0;
     Bump_Control();
     CHECK(pump_write_is(1U, GPIO_PIN_SET));
-    CHECK(hp_ms_total >= 4990U && hp_ms_total <= 5000U);
-    const uint32_t pulse_ticks = (hp_ms_total + 9U) / 10U;
     advance_pump_ticks(49U);
     CHECK(pump_write_is(1U, GPIO_PIN_SET));
     advance_pump_ticks(1U);
@@ -576,9 +595,16 @@ int main(void) {
     CHECK(pump_write_is(2U, GPIO_PIN_RESET));
     advance_pump_ticks(1U);
     CHECK(pump_write_is(3U, GPIO_PIN_SET));
-    advance_pump_ticks(pulse_ticks - 200U);
-    CHECK(pump_write_is(7U, GPIO_PIN_RESET));
-    CHECK(CurrentBump_mode == Bump_OFF && hp_running == 0U);
+    advance_pump_ticks(1849U);
+    CHECK(pump_write_is(21U, GPIO_PIN_SET));
+    advance_pump_ticks(1U);
+    CHECK(pump_write_is(22U, GPIO_PIN_RESET));
+    advance_pump_ticks(149U);
+    CHECK(CurrentBump_mode == Bump_CALIBRATION && pump_write_is(22U, GPIO_PIN_RESET));
+    advance_pump_ticks(1U);
+    /* The existing pulse phase check runs before the total-time check. */
+    CHECK(pump_write_is(24U, GPIO_PIN_RESET) && previous_pump_level == GPIO_PIN_SET);
+    CHECK(CurrentBump_mode == Bump_OFF);
 
     /* Auto mode starts after the existing 30 s gate and stops on its TIM1 boundary. */
     Bump_Control();
@@ -590,11 +616,10 @@ int main(void) {
     ++tick;
     Bump_Control();
     CHECK(pump_write_is(1U, GPIO_PIN_SET));
-    CHECK(time_ms >= 4990U && time_ms <= 5000U);
-    advance_pump_ticks(time_ms / 10U);
+    advance_pump_ticks(2199U);
     CHECK(pump_write_is(1U, GPIO_PIN_SET));
     advance_pump_ticks(1U);
-    CHECK(pump_write_is(2U, GPIO_PIN_RESET) && time_ms == 0U && CurrentBump_mode == Bump_AUTO);
+    CHECK(pump_write_is(2U, GPIO_PIN_RESET) && CurrentBump_mode == Bump_AUTO);
 
     /* Switching an active pump to off writes low before the next timer event. */
     tick = 60002U;
@@ -602,9 +627,19 @@ int main(void) {
     CHECK(pump_write_is(3U, GPIO_PIN_SET));
     Bump_Set(Bump_OFF);
     Bump_Control();
-    CHECK(pump_write_is(4U, GPIO_PIN_RESET) && time_ms == 0U);
+    CHECK(pump_write_is(4U, GPIO_PIN_RESET));
     advance_pump_ticks(1U);
     CHECK(pump_write_is(4U, GPIO_PIN_RESET));
+    /* On an exact tick boundary auto mode stops after 6800 ms, not at equality. */
+    (void)AppConfig_Set(APP_CFG_SOIL_HIGH, 42);
+    Bump_Set(Bump_AUTO);
+    gpio_writes = 0;
+    Bump_Control();
+    CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    advance_pump_ticks(680U);
+    CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    advance_pump_ticks(1U);
+    CHECK(pump_write_is(2U, GPIO_PIN_RESET) && CurrentBump_mode == Bump_AUTO);
     return assertions==EXPECTED_ASSERTIONS?0:32000;
 }
 '''

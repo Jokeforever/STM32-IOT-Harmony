@@ -25,6 +25,8 @@ void BUMP_Init(void);
 void Irrigation_Control(void) ;
 
 void Bump_Control(void);
+/* TIM1 每 10 ms 在按键扫描后调用一次。 */
+void Bump_OnTimerTick(void);
 
 void Bump_Display(void);
 

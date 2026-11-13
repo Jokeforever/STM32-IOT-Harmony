@@ -7,6 +7,7 @@
  * 关键函数：
  *   BUMP_Init()        初始化阈值并默认关闭水泵
  *   Bump_Control()     根据模式执行水泵控制
+ *   Bump_OnTimerTick()  处理定时器中断中的脉冲切换和到时关泵
  *   Bump_Set()         修改水泵模式
  *   Calculate_Water_Volume() 根据土壤湿度估算水量
  * 注意：
@@ -19,10 +20,9 @@
 
 extern float water_vol ;
 
-volatile uint32_t watertime ;
-volatile uint8_t waterflag = 0;
-volatile float time_min  = 0;
-volatile uint32_t time_ms = 0;
+static volatile uint32_t watertime ;
+static volatile uint8_t waterflag = 0;
+static volatile uint32_t time_ms = 0;
 
 
 void BUMP_Init(void)
@@ -51,13 +51,13 @@ float Calculate_Water_Volume(uint16_t current_humi)
    
 }
 
-volatile uint32_t hp_ms_total = 0;       // 本次高压总时长
-volatile uint32_t hp_ms_count = 0;      // 已运行时长
-volatile uint8_t hp_running = 0;        // 是否正在高压模式
-volatile uint8_t hp_is_on = 0;          // 当前水泵开/关（0=关,1=开）
-volatile uint32_t hp_state_start = 0;   // 当前状态开始时刻
-uint32_t HP_ON_MS = 500;                 // 高压开 0.5s
-uint32_t HP_OFF_MS = 1500;              // 高压关 1.5s
+static volatile uint32_t hp_ms_total = 0;       // 本次高压总时长
+static volatile uint32_t hp_ms_count = 0;      // 已运行时长
+static volatile uint8_t hp_running = 0;        // 是否正在高压模式
+static volatile uint8_t hp_is_on = 0;          // 当前水泵开/关（0=关,1=开）
+static volatile uint32_t hp_state_start = 0;   // 当前状态开始时刻
+static const uint32_t HP_ON_MS = 500;                 // 高压开 0.5s
+static const uint32_t HP_OFF_MS = 1500;              // 高压关 1.5s
 
 void Irrigation_Control(void) 
 	{
@@ -76,7 +76,7 @@ void Irrigation_Control(void)
         return;
     }
     // 计算灌溉时间（假设水泵流量为FLOW_RATE L/min）
-     time_min = water_vol / FLOW_RATE;
+     const float time_min = water_vol / FLOW_RATE;
      time_ms = (uint32_t)(time_min * 60000.0f);  // 转换为毫秒
     
 		waterflag = 1;
@@ -149,6 +149,43 @@ void Bump_Control(void)
 				}				
 						break;
 	}
+}
+
+void Bump_OnTimerTick(void)
+{
+    if (waterflag && AppConfig_Get()->bump_mode == Bump_AUTO) {
+        watertime++;
+        if (watertime * 10U > time_ms) {
+            time_ms = 0;
+            watertime = 0;
+            waterflag = 0;
+            PumpPort_Set(0U);
+        }
+    } else if (hp_running && AppConfig_Get()->bump_mode == Bump_CALIBRATION) {
+        hp_ms_count++;
+        const uint32_t elapsed = HAL_GetTick() - hp_state_start;
+
+        if (hp_is_on) {
+            if (elapsed >= HP_ON_MS) {
+                PumpPort_Set(0U);
+                hp_is_on = 0;
+                hp_state_start = HAL_GetTick();
+            }
+        } else if (elapsed >= HP_OFF_MS && hp_ms_count < hp_ms_total) {
+            PumpPort_Set(1U);
+            hp_is_on = 1;
+            hp_state_start = HAL_GetTick();
+        }
+
+        if (hp_ms_count * 10U >= hp_ms_total) {
+            hp_running = 0;
+            hp_ms_count = 0;
+            hp_ms_total = 0;
+            hp_is_on = 0;
+            PumpPort_Set(0U);
+            AppConfig_CompletePumpFromISR();
+        }
+    }
 }
 
 /* 兼容绘制入口Bump_Display的实现已集中到Display.c。 */
