@@ -60,6 +60,7 @@
 #include "LED.h"
 #include "beep.h"
 #include "jdq.h"
+#include "fan.h"
 #include "oled.h"
 #include "Display.h"
 #include "Key.h"

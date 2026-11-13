@@ -67,6 +67,7 @@ for name in ('main.h', 'fan.h', 'jdq.h', 'beep.h'):
 header('sensor_data.h', read('modules/middleware/inc/sensor_data.h'))
 header('mw_alarm.h', read('modules/middleware/inc/mw_alarm.h'))
 header('mw_climate.h',read('modules/middleware/inc/mw_climate.h'))
+header('mw_climate_port.h', read('modules/middleware/inc/mw_climate_port.h'))
 header('mw_alarm_port.h', read('modules/middleware/inc/mw_alarm_port.h'))
 header('app_sensors.h', read('modules/app/inc/app_sensors.h'))
 header('app_config.h', read('modules/app/inc/app_config.h'))
@@ -538,7 +539,7 @@ int main(void) {
 expected_assertions=harness.count('CHECK(')-1+51
 harness=harness.replace('EXPECTED_ASSERTIONS',str(expected_assertions))
 (OUT / 'test.c').write_text(harness, encoding='utf-8')
-source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c','modules/app/src/app_key_port.c','modules/middleware/src/mw_climate.c','modules/middleware/src/mw_alarm.c','modules/app/src/app_alarm_port.c']
+source_rel = ['Core/Src/LED.c','Core/Src/jdq.c','Core/Src/beep.c','Core/Src/Key.c','Core/Src/bump.c','modules/app/src/app_config.c','modules/app/src/app_config_port.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_pid.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','modules/app/src/app_led_port.c','modules/app/src/app_key_port.c','modules/middleware/src/mw_climate.c','modules/app/src/app_climate_port.c','modules/middleware/src/mw_alarm.c','modules/app/src/app_alarm_port.c']
 sources = []
 for rel in source_rel:
     p = OUT / Path(rel).name

@@ -23,10 +23,26 @@ harness=r'''
 #include "mw_config.h"
 #include "app_commands.h"
 #include "jdq.h"
+#include "fan.h"
+#include "gpio.h"
 #include <stddef.h>
 ARRAYS
 static uint8_t memory[256];static uint32_t tick;static unsigned read_fail,write_fail,corrupt,checks,writes,reads,resets;
-static SensorData data;static unsigned ports[4],values[4],used;
+static SensorData data;
+typedef struct {
+    unsigned port;
+    unsigned pins;
+    unsigned level;
+} GpioWrite;
+static GpioWrite gpio_writes[8];
+static unsigned used;
+static unsigned climate_mode, writes_at_climate_mode;
+
+static int wrote(unsigned index, unsigned pins, unsigned level)
+{
+    const GpioWrite *write = &gpio_writes[index];
+    return write->port == GPIOB && write->pins == pins && write->level == level;
+}
 int _fltused=0;
 void *memset(void *p,int c,size_t n){unsigned char *d=p;while(n--)*d++=(unsigned char)c;return p;}
 void *memcpy(void *p,const void *q,size_t n){unsigned char *d=p;const unsigned char *s=q;while(n--)*d++=*s++;return p;}
@@ -34,7 +50,21 @@ int strcmp(const char *a,const char *b){while(*a&&*a==*b){++a;++b;}return (unsig
 void LED_PID_Reset(void){++resets;}void Mode_Switch(void){}
 uint32_t __get_PRIMASK(void){return 0;}void __disable_irq(void){}void __set_PRIMASK(uint32_t v){(void)v;}
 const SensorData *SensorService_GetData(void){return &data;}
-void HAL_GPIO_WritePin(unsigned port,unsigned pin,unsigned value){(void)port;if(used<4){ports[used]=pin;values[used]=value;}++used;}
+void HAL_GPIO_WritePin(unsigned port, unsigned pins, unsigned level)
+{
+    if (used < sizeof(gpio_writes) / sizeof(gpio_writes[0])) {
+        gpio_writes[used] = (GpioWrite){port, pins, level};
+    }
+    ++used;
+}
+
+void HAL_GPIO_Init(unsigned port, const GPIO_InitTypeDef *config)
+{
+    if (port == GPIOB && (config->Pin & (GPIO_PIN_5 | GPIO_PIN_6)) != 0U) {
+        climate_mode = config->Mode;
+        writes_at_climate_mode = used;
+    }
+}
 uint32_t ConfigPort_NowMs(void){return tick;}
 uint8_t ConfigPort_Read(uint16_t offset,uint8_t *out,uint16_t count){++reads;if(read_fail||(unsigned)offset+count>256)return 0;memcpy(out,memory+offset,count);return 1;}
 uint8_t ConfigPort_Write(uint16_t offset,const uint8_t *in,uint16_t count){++writes;if(write_fail||(unsigned)offset+count>256)return 0;memcpy(memory+offset,in,count);if(corrupt)memory[offset]^=1;return 1;}
@@ -80,10 +110,50 @@ int main(void){
     CHECK(!Climate_Evaluate(&data,0,&state,&out));CHECK(!Climate_Evaluate(&data,&limits,0,&out));
     CHECK(!Climate_Evaluate(&data,&limits,&state,0));limits.temp_low_c=31;CHECK(!Climate_Evaluate(&data,&limits,&state,&out));
     limits.temp_low_c=20;limits.temp_high_c=101;CHECK(!Climate_Evaluate(&data,&limits,&state,&out));
-    /* Real Monitor_Temp adapter: fan PB5 before heater PB6, low-active. */
-    AppConfig_Init();JDQ_Init();used=0;data.temperature_c=19;data.co2_ppm=2001;data.valid_mask=9;Monitor_Temp();
-    CHECK(used==2&&ports[0]==(1U<<5)&&ports[1]==(1U<<6));CHECK(values[0]==0&&values[1]==0);
-    used=0;data.valid_mask=0;Monitor_Temp();CHECK(used==2&&values[0]==1&&values[1]==1);
+    /* GPIO initialization must preload both inactive levels before push-pull. */
+    used = 0;
+    MX_GPIO_Init();
+    CHECK(climate_mode == GPIO_MODE_OUTPUT_PP);
+    CHECK(writes_at_climate_mode > 3U && wrote(3, GPIO_PIN_5 | GPIO_PIN_6, GPIO_PIN_SET));
+
+    /* Hardware_Init calls these in heater-then-fan order. */
+    AppConfig_Init();
+    used = 0;
+    JDQ_Init();
+    FAN_Init();
+    CHECK(used == 2U && wrote(0, GPIO_PIN_6, GPIO_PIN_SET) && wrote(1, GPIO_PIN_5, GPIO_PIN_SET));
+
+    /* Runtime writes fan first, heater second. The four rows exercise both pins. */
+    {
+        static const struct {
+            uint8_t temperature;
+            uint16_t co2;
+            unsigned fan_level;
+            unsigned heater_level;
+        } outputs[] = {
+            {25, 350, GPIO_PIN_SET, GPIO_PIN_SET},
+            {31, 350, GPIO_PIN_RESET, GPIO_PIN_SET},
+            {19, 350, GPIO_PIN_SET, GPIO_PIN_RESET},
+            {19, 2001, GPIO_PIN_RESET, GPIO_PIN_RESET},
+        };
+        data.valid_mask = SENSOR_VALID_TEMP | SENSOR_VALID_CO2;
+        for (i = 0; i < sizeof(outputs) / sizeof(outputs[0]); ++i) {
+            used = 0;
+            data.temperature_c = outputs[i].temperature;
+            data.co2_ppm = outputs[i].co2;
+            Monitor_Temp();
+            CHECK(used == 2U && wrote(0, GPIO_PIN_5, outputs[i].fan_level));
+            CHECK(wrote(1, GPIO_PIN_6, outputs[i].heater_level));
+        }
+    }
+    used = 0;
+    data.valid_mask = SENSOR_VALID_CO2;
+    Monitor_Temp();
+    CHECK(used == 2U && wrote(0, GPIO_PIN_5, GPIO_PIN_RESET) && wrote(1, GPIO_PIN_6, GPIO_PIN_SET));
+    used = 0;
+    data.valid_mask = 0;
+    Monitor_Temp();
+    CHECK(used == 2U && wrote(0, GPIO_PIN_5, GPIO_PIN_SET) && wrote(1, GPIO_PIN_6, GPIO_PIN_SET));
     /* Paired config boundaries, restore rejection, same-value behavior and PID independence. */
     CHECK(AppConfig_Get()->temp_threshold==30&&AppConfig_Get()->temp_low_threshold==20);
     CHECK(AppConfig_Set(APP_CFG_TEMP_THRESHOLD,20)==APP_CONFIG_REJECTED);
@@ -138,9 +208,36 @@ with tempfile.TemporaryDirectory(prefix='stm32-climate-') as td:
         f=out/name;f.write_text(t,encoding='utf-8');return str(f)
     for name,rel in [('mw_climate.h','modules/middleware/inc/mw_climate.h'),('sensor_data.h','modules/middleware/inc/sensor_data.h'),('mw_config.h','modules/middleware/inc/mw_config.h'),('mw_config_port.h','modules/middleware/inc/mw_config_port.h'),('app_config.h','modules/app/inc/app_config.h'),('app_commands.h','modules/app/inc/app_commands.h'),('mw_command.h','modules/middleware/inc/mw_command.h'),('app_sensors.h','modules/app/inc/app_sensors.h'),('jdq.h','Core/Inc/jdq.h'),('fan.h','Core/Inc/fan.h')]:put(name,read(rel))
     put('main.h','#include <stdint.h>\nuint32_t __get_PRIMASK(void);void __disable_irq(void);void __set_PRIMASK(uint32_t);\n#define GPIOB 1U\n#define GPIO_PIN_5 (1U<<5)\n#define GPIO_PIN_6 (1U<<6)\n#define GPIO_PIN_RESET 0U\n#define GPIO_PIN_SET 1U\nvoid HAL_GPIO_WritePin(unsigned,unsigned,unsigned);\n')
+    put('mw_climate_port.h', read('modules/middleware/inc/mw_climate_port.h'))
+    put('gpio.h', r'''#ifndef MOCK_GPIO_H
+#define MOCK_GPIO_H
+#include "main.h"
+#define GPIOA 0U
+#define GPIOC 2U
+#define GPIO_PIN_0 (1U << 0)
+#define GPIO_PIN_1 (1U << 1)
+#define GPIO_PIN_4 (1U << 4)
+#define GPIO_PIN_7 (1U << 7)
+#define GPIO_PIN_12 (1U << 12)
+#define GPIO_PIN_13 (1U << 13)
+#define GPIO_MODE_OUTPUT_PP 1U
+#define GPIO_MODE_INPUT 2U
+#define GPIO_NOPULL 0U
+#define GPIO_PULLUP 1U
+#define GPIO_SPEED_FREQ_LOW 0U
+#define GPIO_SPEED_FREQ_HIGH 1U
+#define __HAL_RCC_GPIOA_CLK_ENABLE() ((void)0)
+#define __HAL_RCC_GPIOB_CLK_ENABLE() ((void)0)
+#define __HAL_RCC_GPIOC_CLK_ENABLE() ((void)0)
+#define __HAL_RCC_GPIOD_CLK_ENABLE() ((void)0)
+typedef struct { unsigned Pin, Mode, Pull, Speed; } GPIO_InitTypeDef;
+void HAL_GPIO_Init(unsigned port, const GPIO_InitTypeDef *config);
+void MX_GPIO_Init(void);
+#endif
+''')
     put('LED.h','void LED_PID_Reset(void);void Mode_Switch(void);\n')
     put('string.h','#include <stddef.h>\nvoid *memcpy(void*,const void*,size_t);void *memset(void*,int,size_t);int strcmp(const char*,const char*);\n')
-    sources=[put('test.c',harness)]+[put(Path(rel).name,read(rel)) for rel in ['modules/middleware/src/mw_climate.c','modules/app/src/app_config.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','Core/Src/jdq.c']]
+    sources=[put('test.c',harness)]+[put(Path(rel).name,read(rel)) for rel in ['modules/middleware/src/mw_climate.c','modules/app/src/app_config.c','modules/middleware/src/mw_config.c','modules/middleware/src/mw_command.c','modules/app/src/app_commands.c','Core/Src/jdq.c', 'Core/Src/fan.c', 'Core/Src/gpio.c', 'modules/app/src/app_climate_port.c']]
     flags=['--target=x86_64-pc-windows-msvc','-ffreestanding','-fno-builtin','-O0','-Wall','-Wextra','-Werror','-I'+str(out)]
     # Pure module compiles with only its contract and SensorData, also check C++ API.
     public=out/'public';public.mkdir()
@@ -150,4 +247,4 @@ with tempfile.TemporaryDirectory(prefix='stm32-climate-') as td:
     run([a.clang,'--target=x86_64-pc-windows-msvc','-ffreestanding','-fsyntax-only','-I'+str(public),str(out/'mw_climate.c')])
     exe=out/'test.exe';run([a.clang,*flags,'-fuse-ld=lld','-nostdlib','-Wl,/entry:main,/subsystem:console',*sources,str(kernel),'-o',str(exe)])
     print(run([str(exe)]).stdout,end='')
-print('PASS: stateful hysteresis, CO2 independence, GPIO adapter, atomic paired validation, independent v1/v2/v3 CRC fixtures and persistence failure recovery. No hardware/network.')
+print('PASS: stateful hysteresis, CO2 independence, GPIO initialization and runtime writes, atomic paired validation, independent v1/v2/v3 CRC fixtures and persistence failure recovery. No hardware/network.')
