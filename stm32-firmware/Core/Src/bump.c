@@ -107,6 +107,9 @@ void Bump_Control(void)
 						Start_HighPressure_Irrigation();
            break;
     case Bump_AUTO:	
+        if (hp_running && hp_is_on) {
+            PumpPort_Set(0U);
+        }
 						hp_running = 0;
 						hp_ms_count = 0;
 						hp_ms_total = 0;

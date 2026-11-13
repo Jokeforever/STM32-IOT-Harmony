@@ -727,6 +727,63 @@ int main(void) {
     Bump_Control();
     CHECK(pump_write_is(1U, GPIO_PIN_RESET) && water_vol == 0.0f);
     CHECK(CurrentBump_mode == Bump_CALIBRATION);
+
+    /* Leaving a high pulse must stop its output before the first auto check. */
+    Bump_Set(Bump_OFF);
+    Bump_Control();
+    (void)AppConfig_Set(APP_CFG_SOIL_LOW, 25);
+    (void)AppConfig_Set(APP_CFG_SOIL_HIGH, 80);
+    moist = 0;
+    tick = 1000U;
+    gpio_writes = 0U;
+    Bump_Set(Bump_CALIBRATION);
+    Bump_Control();
+    CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    advance_pump_ticks(20U);
+    Bump_Set(Bump_AUTO);
+    Bump_Control();
+    CHECK(tick == 1200U && pump_write_is(2U, GPIO_PIN_RESET));
+    for (unsigned i = 0U; i < 2880U; ++i) {
+        advance_pump_ticks(1U);
+        Bump_Control();
+    }
+    CHECK(tick == 30000U && pump_write_is(2U, GPIO_PIN_RESET));
+    ++tick;
+    Bump_Control();
+    CHECK(pump_write_is(3U, GPIO_PIN_SET));
+    advance_pump_ticks(2199U);
+    CHECK(pump_write_is(3U, GPIO_PIN_SET));
+    advance_pump_ticks(1U);
+    CHECK(pump_write_is(4U, GPIO_PIN_RESET) && CurrentBump_mode == Bump_AUTO);
+
+    /* If the auto check is already due, end the pulse before auto starts. */
+    Bump_Set(Bump_OFF);
+    Bump_Control();
+    tick = 40000U;
+    gpio_writes = 0U;
+    Bump_Set(Bump_CALIBRATION);
+    Bump_Control();
+    advance_pump_ticks(20U);
+    CHECK(pump_write_is(1U, GPIO_PIN_SET));
+    Bump_Set(Bump_AUTO);
+    Bump_Control();
+    CHECK(pump_write_is(3U, GPIO_PIN_SET) && previous_pump_level == GPIO_PIN_RESET);
+    advance_pump_ticks(2200U);
+    CHECK(pump_write_is(4U, GPIO_PIN_RESET) && CurrentBump_mode == Bump_AUTO);
+
+    /* During the low phase, changing mode leaves the already-low output alone. */
+    Bump_Set(Bump_OFF);
+    Bump_Control();
+    tick = 1000U;
+    gpio_writes = 0U;
+    Bump_Set(Bump_CALIBRATION);
+    Bump_Control();
+    advance_pump_ticks(50U);
+    CHECK(pump_write_is(2U, GPIO_PIN_RESET));
+    Bump_Set(Bump_AUTO);
+    Bump_Control();
+    advance_pump_ticks(150U);
+    CHECK(pump_write_is(2U, GPIO_PIN_RESET) && CurrentBump_mode == Bump_AUTO);
     return assertions==EXPECTED_ASSERTIONS?0:32000;
 }
 '''
