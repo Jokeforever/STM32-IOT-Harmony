@@ -49,6 +49,7 @@
 //中间件层
 #include "mw_config.h"
 #include "app_sensors.h"
+#include "app_vgus.h"
 #include "app_commands.h"
 
 //硬件驱动
@@ -245,6 +246,7 @@ int main(void)
         {
             last_upload_tick = now_tick;
             SensorService_Poll();
+            Vgus_DisplayTempHumi(SensorService_GetData());
         }
         /* 命令先处理，输出业务更新后再上报；事件上报不推迟5秒采集时钟。 */
 
