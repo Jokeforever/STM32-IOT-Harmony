@@ -3,6 +3,17 @@
 
 #include "sensor_data.h"
 
+typedef enum {
+    VGUS_LINK_INITIALIZING,
+    VGUS_LINK_CONNECTING_WIFI,
+    VGUS_LINK_CONNECTING_CLOUD,
+    VGUS_LINK_ONLINE,
+    VGUS_LINK_LOCAL_ONLY
+} VgusLinkState;
+
+/* 初始化阶段和主循环均可调用，屏幕独立重启后也会收到最新提示。 */
+void Vgus_UpdateLinkStatus(VgusLinkState state, uint32_t now_ms);
+
 /* USART1 初始化后，每个采集周期发送一次环境读数与现有补水估算。 */
 void Vgus_DisplayEnvironment(const SensorData *sensors, float water_volume_l);
 

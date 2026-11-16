@@ -164,6 +164,39 @@ void Vgus_UpdateActuators(uint32_t now_ms)
     }
 }
 
+void Vgus_UpdateLinkStatus(VgusLinkState state, uint32_t now_ms)
+{
+    static const char *const labels[] = {
+        [VGUS_LINK_INITIALIZING] = "\xD6\xF7\xBF\xD8\xB3\xF5\xCA\xBC\xBB\xAF", /* 主控初始化 */
+        [VGUS_LINK_CONNECTING_WIFI] = "\xC1\xAC\xBD\xD3\x20\x57\x69\x2D\x46\x69", /* 连接 Wi-Fi */
+        [VGUS_LINK_CONNECTING_CLOUD] = "\xC1\xAC\xBD\xD3\xD4\xC6\xB6\xCB", /* 连接云端 */
+        [VGUS_LINK_ONLINE] = "\xD4\xC6\xB6\xCB\xD4\xDA\xCF\xDF", /* 云端在线 */
+        [VGUS_LINK_LOCAL_ONLY] = "\xC0\xEB\xCF\xDF\x20\xB1\xBE\xB5\xD8\xBF\xC9\xBF\xD8", /* 离线 本地可控 */
+    };
+    static uint8_t sent;
+    static VgusLinkState previous_state;
+    static uint32_t last_send_ms;
+    if ((unsigned)state >= sizeof(labels) / sizeof(labels[0])) {
+        return;
+    }
+    if (sent && state == previous_state && now_ms - last_send_ms < VGUS_STATUS_RESEND_MS) {
+        return;
+    }
+
+    uint8_t frame[6U + VGUS_TEXT_SLOT_BYTES] = {
+        0xA5U, 0x5AU, sizeof(frame) - 3U, 0x82U, 0x03U, 0xD0U
+    };
+    char *const text = (char *)&frame[6];
+    const size_t length = strlen(labels[state]);
+    memcpy(text, labels[state], length);
+    Vgus_FinishTextSlot(text, length);
+    if (HAL_UART_Transmit(&huart1, frame, sizeof(frame), VGUS_TX_TIMEOUT_MS) == HAL_OK) {
+        previous_state = state;
+        last_send_ms = now_ms;
+        sent = 1U;
+    }
+}
+
 /* 0x83 上报一个按键字，或响应一次连续读取 2–3 个待应用值。 */
 #define VGUS_TOUCH_TIMEOUT_MS       25U
 #define VGUS_SETTINGS_TIMEOUT_MS    500U

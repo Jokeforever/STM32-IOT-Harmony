@@ -1,5 +1,9 @@
 # STM32-IOT-Harmony
 
+## VGUS 开机动画与联网提示
+
+串口屏上电约一秒进入环境监测，首页显示等待主控、连接进度、云端在线或离线本地可控。 [动画、协议与实测](docs/37-VGUS-Boot-Animation-and-Link-Status.md)
+
 ## VGUS 温控与光照设置
 
 串口屏可调整加热下限、通风上限、CO₂ 阈值、光照告警上下限和标准模式亮度。支持滑动粗调与逐单位微调。 [页面、协议与实测](docs/36-VGUS-Climate-and-Light-Settings.md)

@@ -1,5 +1,7 @@
 # VGUS 设备状态页
 
+当前设备状态页的返回按钮指向第 13 页环境监测。 [现行开机流程与页号](37-VGUS-Boot-Animation-and-Link-Status.md)
+
 本文保留设备状态页首次联调时的报文格式。当前状态帧从 `0x02F4` 起写入模式标记和原有状态。 [现行状态协议](34-VGUS-Pump-Touch-and-Mode-Markers.md)
 
 本页记录设备状态显示的首次联调。现有第 1 页也支持照明模式触控。 [照明按钮与双向接线](33-VGUS-LED-Touch.md)

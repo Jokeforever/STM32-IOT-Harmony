@@ -167,6 +167,7 @@ int main(void)
 	unsigned char *dataPtr = NULL;
 	uint8_t net_retry = 0;
 	uint8_t login_retry = 0;
+	Vgus_UpdateLinkStatus(VGUS_LINK_INITIALIZING, HAL_GetTick());
 	AppConfig_Init();
 	SensorService_Init();
 	Hardware_Init();
@@ -177,9 +178,11 @@ int main(void)
 	HAL_TIM_Base_Start_IT(&htim1);
 	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_2);
 	Mode_Switch();
+	Vgus_UpdateLinkStatus(VGUS_LINK_CONNECTING_WIFI, HAL_GetTick());
 	ESP8266_Init();	
 	OLED_Clear();
 	OLED_ShowString(0,0,(uint8_t*)" Connect MQTTs Server...",16);
+	Vgus_UpdateLinkStatus(VGUS_LINK_CONNECTING_CLOUD, HAL_GetTick());
 	net_retry = 0;
 	while(ESP8266_SendCmd(ESP8266_ONENET_INFO, "CONNECT") && net_retry++ < 5)
 		delay_ms(500);
@@ -216,6 +219,8 @@ int main(void)
     /* USER CODE BEGIN 3 */
 		
 		Key_Func();
+		Vgus_UpdateLinkStatus(OneNet_IsConnected() ? VGUS_LINK_ONLINE : VGUS_LINK_LOCAL_ONLY,
+		                       HAL_GetTick());
 
 		if ((AppConfig_Get()->led_mode == MODE_AUTO_PID) &&
 		    ((HAL_GetTick() - last_led_control_tick) >= LED_CONTROL_INTERVAL_MS))

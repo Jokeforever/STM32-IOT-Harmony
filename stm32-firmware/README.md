@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## VGUS 开机与联网状态回显
+
+`Vgus_UpdateLinkStatus()` 将启动阶段及 OneNET 连接标志传给环境监测页。开机动画由原串口屏工程播放，主控继续执行原有启动流程。 [状态和串口地址](../docs/37-VGUS-Boot-Animation-and-Link-Status.md)
+
 ## VGUS 温控与光照设置
 
 VGUS 接收模块区分灌溉、温控和光照三个设置区，按当前页面读取待应用值并回显实际配置。配置仍通过原有流程写入 24C02。 [地址和验证](../docs/36-VGUS-Climate-and-Light-Settings.md)
