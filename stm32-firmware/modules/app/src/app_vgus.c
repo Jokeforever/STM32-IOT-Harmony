@@ -70,15 +70,21 @@ void Vgus_DisplayEnvironment(const SensorData *sensors, float water_volume_l)
 /* 六个连续的 8 字文本槽，地址从 0x0300 起，每格偏移 8。 */
 #define VGUS_ACTUATORS_VP        0x0300U
 #define VGUS_ACTUATOR_SLOTS      6U
+#define VGUS_MODE_MARKER_COUNT   6U
+#define VGUS_MODE_MARKER_BYTES   4U
+#define VGUS_MODE_MARKERS_BYTES  (VGUS_MODE_MARKER_COUNT * VGUS_MODE_MARKER_BYTES)
+#define VGUS_STATUS_DATA_BYTES   (VGUS_MODE_MARKERS_BYTES + VGUS_ACTUATOR_SLOTS * VGUS_TEXT_SLOT_BYTES)
+/* 标记占 0x02F4–0x02FF，紧接原状态区，按键地址 0x0330/0x0331 独立。 */
+#define VGUS_STATUS_FRAME_VP     (VGUS_ACTUATORS_VP - VGUS_MODE_MARKERS_BYTES / 2U)
 #define VGUS_STATUS_POLL_MS      200U
 #define VGUS_STATUS_RESEND_MS    1000U
 #define VGUS_STATUS_TIMEOUT_MS   15U
 
 static const char *const led_modes[] = {
     [MODE_OFF] = "\xB9\xD8\xB1\xD5",
-    [MODE_CALIBRATION] = "\xCA\xD6\xB6\xAF",
+    [MODE_CALIBRATION] = "\xB1\xEA\xD7\xBC",
     [MODE_AUTO_PID] = "\xD7\xD4\xB6\xAF"
-}; /* 关闭、手动、自动，GB2312 */
+}; /* 关闭、标准、自动，GB2312 */
 static const char *const pump_modes[] = {
     [Bump_OFF] = "\xB9\xD8\xB1\xD5",
     [Bump_CALIBRATION] = "\xC2\xF6\xB3\xE5\xB9\xE0\xB8\xC8",
@@ -98,19 +104,36 @@ void Vgus_UpdateActuators(uint32_t now_ms)
     static uint32_t last_poll_ms;
     static uint32_t last_send_ms;
     static uint8_t sent;
-    static uint8_t previous[VGUS_ACTUATOR_SLOTS * VGUS_TEXT_SLOT_BYTES];
+    static uint8_t previous[VGUS_STATUS_DATA_BYTES];
 
     if (now_ms - last_poll_ms < VGUS_STATUS_POLL_MS) {
         return;
     }
     last_poll_ms = now_ms;
 
-    uint8_t frame[6U + VGUS_ACTUATOR_SLOTS * VGUS_TEXT_SLOT_BYTES] = {
+    uint8_t frame[6U + VGUS_STATUS_DATA_BYTES] = {
         0xA5U, 0x5AU, sizeof(frame) - 3U, 0x82U,
-        (uint8_t)(VGUS_ACTUATORS_VP >> 8), (uint8_t)VGUS_ACTUATORS_VP
+        (uint8_t)(VGUS_STATUS_FRAME_VP >> 8), (uint8_t)VGUS_STATUS_FRAME_VP
     };
-    char *const payload = (char *)&frame[6];
+    uint8_t *const payload = &frame[6];
+    char *const status = (char *)&payload[VGUS_MODE_MARKERS_BYTES];
     const RuntimeConfig *config = AppConfig_Get();
+    /* 和屏上两行按钮同序。只根据主控当前模式显示实心圆。 */
+    const uint8_t selected[VGUS_MODE_MARKER_COUNT] = {
+        config->led_mode == MODE_OFF,
+        config->led_mode == MODE_CALIBRATION,
+        config->led_mode == MODE_AUTO_PID,
+        config->bump_mode == Bump_OFF,
+        config->bump_mode == Bump_CALIBRATION,
+        config->bump_mode == Bump_AUTO
+    };
+    for (size_t index = 0; index < VGUS_MODE_MARKER_COUNT; ++index) {
+        uint8_t *const marker = &payload[index * VGUS_MODE_MARKER_BYTES];
+        marker[0] = selected[index] ? 0xA1U : ' ';
+        marker[1] = selected[index] ? 0xF1U : ' ';
+        marker[2] = 0xFFU;
+        marker[3] = 0xFFU;
+    }
     char duty[8];
     const unsigned permille = LED_GetDutyPermille();
     (void)snprintf(duty, sizeof(duty), "%u.%u%%", permille / 10U, permille % 10U);
@@ -124,7 +147,7 @@ void Vgus_UpdateActuators(uint32_t now_ms)
     };
     for (size_t index = 0; index < VGUS_ACTUATOR_SLOTS; ++index) {
         const size_t length = strlen(rows[index]);
-        char *const slot = payload + index * VGUS_TEXT_SLOT_BYTES;
+        char *const slot = status + index * VGUS_TEXT_SLOT_BYTES;
         memcpy(slot, rows[index], length);
         Vgus_FinishTextSlot(slot, length);
     }
@@ -141,20 +164,30 @@ void Vgus_UpdateActuators(uint32_t now_ms)
     }
 }
 
-/* A5 5A 06 83 03 30 01 00 <键值>，0x0330 只用于照明命令。 */
-#define VGUS_TOUCH_TIMEOUT_MS 25U
-static const uint8_t led_key_prefix[] = {
-    0xA5U, 0x5AU, 0x06U, 0x83U, 0x03U, 0x30U, 0x01U, 0x00U
+/* A5 5A 06 83 03 <地址低字节> 01 00 <键值>。 */
+#define VGUS_TOUCH_TIMEOUT_MS    25U
+#define VGUS_TOUCH_ADDRESS_INDEX 5U
+#define VGUS_TOUCH_LED_LOW       0x30U
+
+static const uint8_t touch_prefix[] = {
+    0xA5U, 0x5AU, 0x06U, 0x83U, 0x03U, VGUS_TOUCH_LED_LOW, 0x01U, 0x00U
 };
-static const uint8_t led_key_modes[] = {
-    MODE_OFF, MODE_CALIBRATION, MODE_AUTO_PID
+/* 连续地址 0x0330 和 0x0331 分别对应照明和水泵。 */
+static const struct {
+    CommandKey command;
+    uint8_t modes[3];
+} touch_controls[] = {
+    {COMMAND_LED, {MODE_OFF, MODE_CALIBRATION, MODE_AUTO_PID}},
+    {COMMAND_PUMP, {Bump_OFF, Bump_CALIBRATION, Bump_AUTO}}
 };
+#define VGUS_TOUCH_CONTROL_COUNT (sizeof(touch_controls) / sizeof(touch_controls[0]))
 
 static uint8_t touch_byte;
 static uint8_t touch_pos;
+static uint8_t touch_control;
 static uint32_t last_touch_byte_ms;
-/* 每个按键指定目标模式。主循环繁忙时保留最后一个完整请求。 */
-static volatile uint8_t pending_led_key;
+/* 各执行器独立保留最后一个有效目标。 */
+static volatile uint8_t pending_touch_keys[VGUS_TOUCH_CONTROL_COUNT];
 
 void Vgus_StartTouch(void)
 {
@@ -170,15 +203,19 @@ void Vgus_TouchRxComplete(void)
     }
     last_touch_byte_ms = now_ms;
 
-    if (touch_pos < sizeof(led_key_prefix) && touch_byte == led_key_prefix[touch_pos]) {
+    const uint8_t control = (uint8_t)(touch_byte - VGUS_TOUCH_LED_LOW);
+    if (touch_pos == VGUS_TOUCH_ADDRESS_INDEX && control < VGUS_TOUCH_CONTROL_COUNT) {
+        touch_control = control;
+        ++touch_pos;
+    } else if (touch_pos < sizeof(touch_prefix) && touch_byte == touch_prefix[touch_pos]) {
         ++touch_pos;
     } else {
-        if (touch_pos == sizeof(led_key_prefix) &&
-            touch_byte > 0U && touch_byte <= sizeof(led_key_modes)) {
-            pending_led_key = touch_byte;
+        if (touch_pos == sizeof(touch_prefix) &&
+            touch_byte > 0U && touch_byte <= sizeof(touch_controls[0].modes)) {
+            pending_touch_keys[touch_control] = touch_byte;
         }
         /* 遇到新的帧头，直接用当前字节开始同步。 */
-        touch_pos = (touch_byte == led_key_prefix[0]) ? 1U : 0U;
+        touch_pos = (touch_byte == touch_prefix[0]) ? 1U : 0U;
     }
 
     (void)HAL_UART_Receive_IT(&huart1, &touch_byte, 1U);
@@ -192,14 +229,25 @@ void Vgus_TouchRxError(void)
 
 void Vgus_ProcessTouch(void)
 {
+    uint8_t keys[VGUS_TOUCH_CONTROL_COUNT];
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
-    const uint8_t key = pending_led_key;
-    pending_led_key = 0U;
+    for (size_t index = 0; index < VGUS_TOUCH_CONTROL_COUNT; ++index) {
+        keys[index] = pending_touch_keys[index];
+        pending_touch_keys[index] = 0U;
+    }
     __set_PRIMASK(primask);
 
-    if (key != 0U) {
-        const CommandEntry command = {COMMAND_LED, led_key_modes[key - 1U]};
-        (void)AppCommands_Execute(&command, 1U);
+    CommandEntry commands[VGUS_TOUCH_CONTROL_COUNT];
+    uint8_t count = 0U;
+    for (size_t index = 0; index < VGUS_TOUCH_CONTROL_COUNT; ++index) {
+        if (keys[index] != 0U) {
+            commands[count].key = touch_controls[index].command;
+            commands[count].value = touch_controls[index].modes[keys[index] - 1U];
+            ++count;
+        }
+    }
+    if (count != 0U) {
+        (void)AppCommands_Execute(commands, count);
     }
 }

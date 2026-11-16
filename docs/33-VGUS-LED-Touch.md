@@ -1,5 +1,7 @@
 # VGUS 串口屏控制照明
 
+本文记录照明触控首次联调。当下屏端的「手动」显示为「标准」，同页也可控制水泵。 [现行按键和回显说明](34-VGUS-Pump-Touch-and-Mode-Markers.md)
+
 2026-11-16 用户确认照明触控实测通过。VTc 480×272 屏仍使用原有 [SmartGrow-VTc 工程](../vgus/SmartGrow-VTc/SmartGrow-VTc.vt)。第 1 页「设备状态」底部可以点选关闭、手动和自动，当前模式与 PWM 占空比由 STM32 回传。 [状态页与回显字段](32-VGUS-Actuator-Status.md)
 
 ## 收发与接线

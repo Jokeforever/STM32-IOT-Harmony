@@ -1,5 +1,9 @@
 # STM32-IOT-Harmony
 
+## VGUS 水泵触控与模式标记
+
+串口屏可控制照明和水泵，两行按钮用圆点显示 STM32 确认的当前模式。照明的中间档显示「标准」。 [操作、协议与复验](docs/34-VGUS-Pump-Touch-and-Mode-Markers.md)
+
 ## VGUS 串口屏控制照明
 
 设备状态页可以直接点选照明关闭、手动和自动，并显示 STM32 回传的模式和 PWM 占空比。实物复测已通过。 [接线、报文和下载步骤](docs/33-VGUS-LED-Touch.md)

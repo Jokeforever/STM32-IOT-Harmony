@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## VGUS 水泵触控与模式标记
+
+主循环从串口屏接收照明与水泵的模式请求，经 `AppCommands_Execute()` 执行。状态上报同时更新六项状态文本和两个选中标记。 [按键、状态报文及复验](../docs/34-VGUS-Pump-Touch-and-Mode-Markers.md)
+
 ## VGUS 串口屏触控照明
 
 USART1 通过 PA10 接收照明触摸指令，主循环经 `AppCommands_Execute()` 执行，再由 `Vgus_UpdateActuators()` 回显。 [协议、接线与实测记录](../docs/33-VGUS-LED-Touch.md)

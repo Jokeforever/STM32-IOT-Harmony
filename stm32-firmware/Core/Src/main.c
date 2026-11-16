@@ -216,7 +216,6 @@ int main(void)
     /* USER CODE BEGIN 3 */
 		
 		Key_Func();
-		Vgus_ProcessTouch();
 
 		if ((AppConfig_Get()->led_mode == MODE_AUTO_PID) &&
 		    ((HAL_GetTick() - last_led_control_tick) >= LED_CONTROL_INTERVAL_MS))
@@ -255,6 +254,7 @@ int main(void)
 				if(dataPtr != NULL)
 				OneNet_RevPro(dataPtr);
 				
+				Vgus_ProcessTouch();
 				Bump_Control();
 				Monitor_Temp();
 				LED_Func();
