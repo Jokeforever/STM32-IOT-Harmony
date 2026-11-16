@@ -1,5 +1,9 @@
 # STM32-IOT-Harmony
 
+## VGUS 灌溉设置
+
+可在串口屏滑动选择干旱和湿润阈值，成对应用后查看 STM32 的确认值。 [配置与复验](docs/35-VGUS-Irrigation-Settings.md)
+
 ## VGUS 水泵触控与模式标记
 
 串口屏可控制照明和水泵，两行按钮用圆点显示 STM32 确认的当前模式。照明的中间档显示「标准」。 [操作、协议与复验](docs/34-VGUS-Pump-Touch-and-Mode-Markers.md)

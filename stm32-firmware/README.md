@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## VGUS 灌溉设置
+
+串口屏的 BL、BH 应用请求由 USART1 处理。STM32 读取两个待应用值后，用同一批命令验证和应用，继续通过 24C02 保存。 [协议和复验](../docs/35-VGUS-Irrigation-Settings.md)
+
 ## VGUS 水泵触控与模式标记
 
 主循环从串口屏接收照明与水泵的模式请求，经 `AppCommands_Execute()` 执行。状态上报同时更新六项状态文本和两个选中标记。 [按键、状态报文及复验](../docs/34-VGUS-Pump-Touch-and-Mode-Markers.md)
