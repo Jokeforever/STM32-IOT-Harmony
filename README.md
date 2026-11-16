@@ -1,5 +1,9 @@
 # STM32-IOT-Harmony
 
+## VGUS 六项环境总览
+
+VTc 串口屏上电进入 480×272 环境首页，使用 USART1 显示五项传感器读数和预计补水量。实物复验已通过。 [工程与配置说明](docs/31-VGUS-Environment-Dashboard.md)
+
 ## VGUS 串口屏环境监测首页
 
 VTc 480×272 串口屏上电显示温湿度占位，STM32 通过 USART1 更新实际读数。新首页和开机占位已通过实屏验证。 [配置与验证](docs/30-VGUS-Environment-Home.md)

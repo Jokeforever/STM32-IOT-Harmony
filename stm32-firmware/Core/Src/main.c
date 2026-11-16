@@ -246,7 +246,6 @@ int main(void)
         {
             last_upload_tick = now_tick;
             SensorService_Poll();
-            Vgus_DisplayTempHumi(SensorService_GetData());
         }
         /* 命令先处理，输出业务更新后再上报；事件上报不推迟5秒采集时钟。 */
 
@@ -258,6 +257,10 @@ int main(void)
 				Monitor_Temp();
 				LED_Func();
 				IS_Normal();
+                if (periodic_report_due)
+                {
+                    Vgus_DisplayEnvironment(SensorService_GetData(), water_vol);
+                }
                 now_tick = HAL_GetTick();
                 if (periodic_report_due || AppCommands_ReportDue(now_tick, last_report_attempt_tick, OneNet_IsConnected()))
                 {

@@ -1,42 +1,57 @@
 #include "app_vgus.h"
 #include "usart.h"
+#include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
-#define VGUS_DEMO_TEMPERATURE_VP 0x0200U
-#define VGUS_DEMO_HUMIDITY_VP    0x0240U
-#define VGUS_TX_TIMEOUT_MS      5U
+#define VGUS_TEMPERATURE_VP   0x0200U
+#define VGUS_HUMIDITY_VP      0x0240U
+#define VGUS_LIGHT_VP         0x0280U
+#define VGUS_CO2_VP           0x0288U
+#define VGUS_SOIL_MOISTURE_VP 0x0290U
+#define VGUS_WATER_VOLUME_VP  0x0298U
+#define VGUS_TEXT_SLOT_BYTES  16U
+#define VGUS_TX_TIMEOUT_MS    5U
 
-static void Vgus_WriteReading(uint16_t address, const char *label, const char *unit,
-                              uint8_t value, uint8_t valid)
+static void Vgus_WriteReading(uint16_t address, uint8_t valid, const char *format, ...)
 {
-    /* 帧头、长度、写变量指令、字地址，随后是按字对齐的 ASCII 文本。 */
-    uint8_t frame[24] = {
-        0xA5U, 0x5AU, 0U, 0x82U, (uint8_t)(address >> 8), (uint8_t)address
+    uint8_t frame[6U + VGUS_TEXT_SLOT_BYTES] = {
+        0xA5U, 0x5AU, sizeof(frame) - 3U, 0x82U, (uint8_t)(address >> 8), (uint8_t)address
     };
     char *const payload = (char *)&frame[6];
-    const size_t capacity = sizeof(frame) - 6U - 2U;
-    const int length = valid != 0U
-                     ? snprintf(payload, capacity, "%s %u%s", label, (unsigned)value, unit)
-                     : snprintf(payload, capacity, "%s --", label);
-    if (length < 0 || (size_t)length >= capacity) {
-        return;
+    /* 最长显示 14 字节，末尾留一个字用于文本结束符。 */
+    const size_t capacity = VGUS_TEXT_SLOT_BYTES - 1U;
+    int length = 2;
+    if (valid == 0U) {
+        memcpy(payload, "--", 2U);
+    } else {
+        va_list args;
+        va_start(args, format);
+        length = vsnprintf(payload, capacity, format, args);
+        va_end(args);
+        if (length < 0 || (size_t)length >= capacity) {
+            memcpy(payload, "--", 2U);
+            length = 2;
+        }
     }
 
-    uint16_t end = (uint16_t)(6U + (unsigned)length);
-    if ((end & 1U) != 0U) {
-        frame[end++] = ' ';
-    }
-    frame[end++] = 0xFFU;
-    frame[end++] = 0xFFU;
-    frame[2] = (uint8_t)(end - 3U);
-    (void)HAL_UART_Transmit(&huart1, frame, end, VGUS_TX_TIMEOUT_MS);
+    /* 整个字槽都重写，数值缩短时不会留下前一帧的字符。 */
+    memset(payload + length, ' ', VGUS_TEXT_SLOT_BYTES - (size_t)length);
+    const unsigned text_end = ((unsigned)length + 1U) & ~1U;
+    frame[6U + text_end] = 0xFFU;
+    frame[7U + text_end] = 0xFFU;
+    (void)HAL_UART_Transmit(&huart1, frame, sizeof(frame), VGUS_TX_TIMEOUT_MS);
 }
 
-void Vgus_DisplayTempHumi(const SensorData *sensors)
+void Vgus_DisplayEnvironment(const SensorData *sensors, float water_volume_l)
 {
-    /* 官方 VTc 480x272 工程的“文本变量”页，左温度、右湿度。 */
-    Vgus_WriteReading(VGUS_DEMO_TEMPERATURE_VP, "TEMP", " C",
-                      sensors->temperature_c, sensors->valid_mask & SENSOR_VALID_TEMP);
-    Vgus_WriteReading(VGUS_DEMO_HUMIDITY_VP, "RH", "%",
-                      sensors->humidity_pct, sensors->valid_mask & SENSOR_VALID_HUMI);
+    Vgus_WriteReading(VGUS_TEMPERATURE_VP, sensors->valid_mask & SENSOR_VALID_TEMP,
+                      "%u", (unsigned)sensors->temperature_c);
+    Vgus_WriteReading(VGUS_HUMIDITY_VP, sensors->valid_mask & SENSOR_VALID_HUMI,
+                      "%u", (unsigned)sensors->humidity_pct);
+    Vgus_WriteReading(VGUS_LIGHT_VP, 1U, "%u", (unsigned)sensors->light_lux);
+    Vgus_WriteReading(VGUS_CO2_VP, sensors->valid_mask & SENSOR_VALID_CO2,
+                      "%u", (unsigned)sensors->co2_ppm);
+    Vgus_WriteReading(VGUS_SOIL_MOISTURE_VP, 1U, "%u", (unsigned)sensors->soil_moisture_pct);
+    Vgus_WriteReading(VGUS_WATER_VOLUME_VP, 1U, "%.1f", (double)water_volume_l);
 }

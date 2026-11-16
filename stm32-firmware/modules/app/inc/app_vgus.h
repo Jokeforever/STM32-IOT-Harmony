@@ -3,7 +3,7 @@
 
 #include "sensor_data.h"
 
-/* USART1 初始化后，在主循环中发送一次温湿度快照。 */
-void Vgus_DisplayTempHumi(const SensorData *sensors);
+/* USART1 初始化后，每个采集周期发送一次环境读数与现有补水估算。 */
+void Vgus_DisplayEnvironment(const SensorData *sensors, float water_volume_l);
 
 #endif

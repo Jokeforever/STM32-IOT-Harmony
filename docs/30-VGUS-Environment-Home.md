@@ -1,5 +1,7 @@
 # VGUS 串口屏环境监测首页
 
+本文记录首次自定义双卡片页面。现用版本为 [VGUS 六项环境总览](31-VGUS-Environment-Dashboard.md)。
+
 2026-11-15 实物验证通过。VTc 480×272 串口屏上电进入「环境监测」，先显示温湿度占位，STM32 采集后通过 USART1 更新两项读数。
 
 ![环境监测首页设计预览，读数为示例](assets/vgus-home/environment-home-preview.png)

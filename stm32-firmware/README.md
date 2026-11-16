@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## VGUS 六项环境总览
+
+`Vgus_DisplayEnvironment()` 在主循环周期采集和灌溉业务更新后，通过 USART1 显示温度、湿度、光照、CO₂、土壤湿度和预计补水。用户确认本轮实屏验证通过。 [屏幕工程和协议](../docs/31-VGUS-Environment-Dashboard.md)
+
 ## USART1 在官方 VGUS 示例显示温湿度
 
 STM32 在采集后通过 USART1 写入官方示例「文本变量」页的 0x0200 和 0x0240。实屏照片显示温度 21°C、相对湿度 64%，用户随后确认 VGUS 屏与 OLED 随采集同步更新。 [验收记录](docs/VGUS-Temp-Humi.md)
