@@ -200,6 +200,7 @@ int main(void)
 	Watchdog_Init();
 	OLED_Clear();
 	CurrentScreen = DISPLAY_NONE;
+	Vgus_StartTouch();
 
   /* USER CODE END 2 */
 
@@ -215,6 +216,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 		
 		Key_Func();
+		Vgus_ProcessTouch();
 
 		if ((AppConfig_Get()->led_mode == MODE_AUTO_PID) &&
 		    ((HAL_GetTick() - last_led_control_tick) >= LED_CONTROL_INTERVAL_MS))

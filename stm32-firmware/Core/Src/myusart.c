@@ -22,6 +22,7 @@
 #include "myusart.h"
 #include "usart.h"
 #include "usart3.h"
+#include "app_vgus.h"
 
 
 //C库
@@ -269,6 +270,12 @@ void UsartPrintf(UART_HandleTypeDef *huart, char *fmt,...)
 //}
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
+    if (huart == &huart1)
+    {
+        if (huart->ErrorCode == HAL_UART_ERROR_NONE)
+            Vgus_TouchRxComplete();
+        return;
+    }
     if(huart == &huart2)
     {
 //        uint8_t received_data = huart->pRxBuffPtr[0]; // huart->pRxBuffPtr 指向启动接收时传入的缓冲区
@@ -343,4 +350,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
         }
     }
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart == &huart1)
+        Vgus_TouchRxError();
 }

@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## VGUS 串口屏触控照明
+
+USART1 通过 PA10 接收照明触摸指令，主循环经 `AppCommands_Execute()` 执行，再由 `Vgus_UpdateActuators()` 回显。 [协议、接线与实测记录](../docs/33-VGUS-LED-Touch.md)
+
 ## VGUS 设备状态页
 
 主循环更新输出后调用 `Vgus_UpdateActuators()`。它用 USART1 在一个报文中更新照明、水泵、风扇和加热器的六项显示值。照明占空比取自 LED 模块，水泵、风扇和加热器的输出状态经各自端口读取。 [协议、输出极性与复验记录](../docs/32-VGUS-Actuator-Status.md)

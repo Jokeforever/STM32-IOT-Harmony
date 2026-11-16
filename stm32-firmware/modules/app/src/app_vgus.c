@@ -1,5 +1,6 @@
 #include "app_vgus.h"
 #include "app_config.h"
+#include "app_commands.h"
 #include "LED.h"
 #include "bump.h"
 #include "mw_pump_port.h"
@@ -137,5 +138,68 @@ void Vgus_UpdateActuators(uint32_t now_ms)
         memcpy(previous, payload, sizeof(previous));
         last_send_ms = now_ms;
         sent = 1U;
+    }
+}
+
+/* A5 5A 06 83 03 30 01 00 <键值>，0x0330 只用于照明命令。 */
+#define VGUS_TOUCH_TIMEOUT_MS 25U
+static const uint8_t led_key_prefix[] = {
+    0xA5U, 0x5AU, 0x06U, 0x83U, 0x03U, 0x30U, 0x01U, 0x00U
+};
+static const uint8_t led_key_modes[] = {
+    MODE_OFF, MODE_CALIBRATION, MODE_AUTO_PID
+};
+
+static uint8_t touch_byte;
+static uint8_t touch_pos;
+static uint32_t last_touch_byte_ms;
+/* 每个按键指定目标模式。主循环繁忙时保留最后一个完整请求。 */
+static volatile uint8_t pending_led_key;
+
+void Vgus_StartTouch(void)
+{
+    __HAL_UART_CLEAR_OREFLAG(&huart1);
+    (void)HAL_UART_Receive_IT(&huart1, &touch_byte, 1U);
+}
+
+void Vgus_TouchRxComplete(void)
+{
+    const uint32_t now_ms = HAL_GetTick();
+    if (now_ms - last_touch_byte_ms >= VGUS_TOUCH_TIMEOUT_MS) {
+        touch_pos = 0U;
+    }
+    last_touch_byte_ms = now_ms;
+
+    if (touch_pos < sizeof(led_key_prefix) && touch_byte == led_key_prefix[touch_pos]) {
+        ++touch_pos;
+    } else {
+        if (touch_pos == sizeof(led_key_prefix) &&
+            touch_byte > 0U && touch_byte <= sizeof(led_key_modes)) {
+            pending_led_key = touch_byte;
+        }
+        /* 遇到新的帧头，直接用当前字节开始同步。 */
+        touch_pos = (touch_byte == led_key_prefix[0]) ? 1U : 0U;
+    }
+
+    (void)HAL_UART_Receive_IT(&huart1, &touch_byte, 1U);
+}
+
+void Vgus_TouchRxError(void)
+{
+    touch_pos = 0U;
+    Vgus_StartTouch();
+}
+
+void Vgus_ProcessTouch(void)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    const uint8_t key = pending_led_key;
+    pending_led_key = 0U;
+    __set_PRIMASK(primask);
+
+    if (key != 0U) {
+        const CommandEntry command = {COMMAND_LED, led_key_modes[key - 1U]};
+        (void)AppCommands_Execute(&command, 1U);
     }
 }
