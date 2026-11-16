@@ -25,6 +25,7 @@ harness=r'''
 #include "jdq.h"
 #include "fan.h"
 #include "gpio.h"
+#include "mw_climate_port.h"
 #include <stddef.h>
 ARRAYS
 static uint8_t memory[256];static uint32_t tick;static unsigned read_fail,write_fail,corrupt,checks,writes,reads,resets;
@@ -37,6 +38,7 @@ typedef struct {
 static GpioWrite gpio_writes[8];
 static unsigned used;
 static unsigned climate_mode, writes_at_climate_mode;
+static unsigned gpio_b_levels;
 
 static int wrote(unsigned index, unsigned pins, unsigned level)
 {
@@ -56,6 +58,14 @@ void HAL_GPIO_WritePin(unsigned port, unsigned pins, unsigned level)
         gpio_writes[used] = (GpioWrite){port, pins, level};
     }
     ++used;
+    if (port == GPIOB) {
+        gpio_b_levels = level == GPIO_PIN_SET ? gpio_b_levels | pins : gpio_b_levels & ~pins;
+    }
+}
+
+unsigned HAL_GPIO_ReadPin(unsigned port, unsigned pin)
+{
+    return port == GPIOB && (gpio_b_levels & pin) != 0U ? GPIO_PIN_SET : GPIO_PIN_RESET;
 }
 
 void HAL_GPIO_Init(unsigned port, const GPIO_InitTypeDef *config)
@@ -145,6 +155,8 @@ int main(void){
             Monitor_Temp();
             CHECK(used == 2U && wrote(0, GPIO_PIN_5, outputs[i].fan_level));
             CHECK(wrote(1, GPIO_PIN_6, outputs[i].heater_level));
+            CHECK(ClimatePort_GetFanOutput() == (outputs[i].fan_level == GPIO_PIN_RESET));
+            CHECK(ClimatePort_GetHeaterOutput() == (outputs[i].heater_level == GPIO_PIN_RESET));
         }
     }
     used = 0;
@@ -208,7 +220,7 @@ with tempfile.TemporaryDirectory(prefix='stm32-climate-') as td:
     def put(name,t):
         f=out/name;f.write_text(t,encoding='utf-8');return str(f)
     for name,rel in [('mw_climate.h','modules/middleware/inc/mw_climate.h'),('sensor_data.h','modules/middleware/inc/sensor_data.h'),('mw_config.h','modules/middleware/inc/mw_config.h'),('mw_config_port.h','modules/middleware/inc/mw_config_port.h'),('app_config.h','modules/app/inc/app_config.h'),('app_commands.h','modules/app/inc/app_commands.h'),('mw_command.h','modules/middleware/inc/mw_command.h'),('app_sensors.h','modules/app/inc/app_sensors.h'),('jdq.h','Core/Inc/jdq.h'),('fan.h','Core/Inc/fan.h')]:put(name,read(rel))
-    put('main.h','#include <stdint.h>\nuint32_t __get_PRIMASK(void);void __disable_irq(void);void __set_PRIMASK(uint32_t);\n#define GPIOB 1U\n#define GPIO_PIN_5 (1U<<5)\n#define GPIO_PIN_6 (1U<<6)\n#define GPIO_PIN_RESET 0U\n#define GPIO_PIN_SET 1U\nvoid HAL_GPIO_WritePin(unsigned,unsigned,unsigned);\n')
+    put('main.h','#include <stdint.h>\nuint32_t __get_PRIMASK(void);void __disable_irq(void);void __set_PRIMASK(uint32_t);\n#define GPIOB 1U\n#define GPIO_PIN_5 (1U<<5)\n#define GPIO_PIN_6 (1U<<6)\n#define GPIO_PIN_RESET 0U\n#define GPIO_PIN_SET 1U\nvoid HAL_GPIO_WritePin(unsigned,unsigned,unsigned);\nunsigned HAL_GPIO_ReadPin(unsigned,unsigned);\n')
     put('mw_climate_port.h', read('modules/middleware/inc/mw_climate_port.h'))
     put('gpio.h', r'''#ifndef MOCK_GPIO_H
 #define MOCK_GPIO_H

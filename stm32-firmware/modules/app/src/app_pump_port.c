@@ -12,3 +12,8 @@ uint32_t PumpPort_NowMs(void)
 {
     return HAL_GetTick();
 }
+
+uint8_t PumpPort_GetOutput(void)
+{
+    return (uint8_t)(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_SET);
+}

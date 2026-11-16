@@ -13,3 +13,13 @@ void ClimatePort_SetHeater(uint8_t active)
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6,
                       active != 0U ? GPIO_PIN_RESET : GPIO_PIN_SET);
 }
+
+uint8_t ClimatePort_GetFanOutput(void)
+{
+    return (uint8_t)(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5) == GPIO_PIN_RESET);
+}
+
+uint8_t ClimatePort_GetHeaterOutput(void)
+{
+    return (uint8_t)(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6) == GPIO_PIN_RESET);
+}

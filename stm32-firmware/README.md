@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## VGUS 设备状态页
+
+主循环更新输出后调用 `Vgus_UpdateActuators()`。它用 USART1 在一个报文中更新照明、水泵、风扇和加热器的六项显示值。照明占空比取自 LED 模块，水泵、风扇和加热器的输出状态经各自端口读取。 [协议、输出极性与复验记录](../docs/32-VGUS-Actuator-Status.md)
+
 ## VGUS 六项环境总览
 
 `Vgus_DisplayEnvironment()` 在主循环周期采集和灌溉业务更新后，通过 USART1 显示温度、湿度、光照、CO₂、土壤湿度和预计补水。用户确认本轮实屏验证通过。 [屏幕工程和协议](../docs/31-VGUS-Environment-Dashboard.md)

@@ -11,6 +11,8 @@ extern "C" {
  * active 为 0 时关闭，非 0 时开启。每次请求写一次输出。
  */
 void PumpPort_Set(uint8_t active);
+/* 返回主控输出引脚的逻辑开关状态。 */
+uint8_t PumpPort_GetOutput(void);
 
 /* 主循环和定时器中断可读取的 32 位毫秒计数，溢出时回到 0。 */
 uint32_t PumpPort_NowMs(void);

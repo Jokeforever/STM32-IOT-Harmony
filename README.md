@@ -1,5 +1,9 @@
 # STM32-IOT-Harmony
 
+## VGUS 环境监测与设备状态
+
+VTc 480×272 串口屏可在六项环境读数与设备状态之间切换。设备状态页显示照明模式及 PWM 占空比、水泵模式及输出、风扇与加热器输出。用户已确认实屏复验通过。 [双页工程与下载说明](docs/32-VGUS-Actuator-Status.md)
+
 ## VGUS 六项环境总览
 
 VTc 串口屏上电进入 480×272 环境首页，使用 USART1 显示五项传感器读数和预计补水量。实物复验已通过。 [工程与配置说明](docs/31-VGUS-Environment-Dashboard.md)

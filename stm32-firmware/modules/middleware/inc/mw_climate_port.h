@@ -13,6 +13,10 @@ extern "C" {
 void ClimatePort_SetFan(uint8_t active);
 void ClimatePort_SetHeater(uint8_t active);
 
+/* 返回主控输出引脚的逻辑开关状态。 */
+uint8_t ClimatePort_GetFanOutput(void);
+uint8_t ClimatePort_GetHeaterOutput(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,5 +1,9 @@
 # 项目 AI 交接文档
 
+## 2026-11-16 VGUS 设备状态页
+
+屏幕继续使用原有的 `vgus/SmartGrow-VTc` 工程。后续在对应的本地 `SmartGrow-VTc.vt` 内修改，并从同一工程下的 `VT_SET_VTc` 取下载包。屏端开机页为 0，设备状态页为 1，两个按钮通过「页面切换」往返。两页已通过实屏复验。STM32 的 `Vgus_UpdateActuators()` 在输出更新后调用，使用 USART1 连写从 `0x0300` 起的六个文本槽。输出读取经水泵和温控端口封装，换板时将新引脚和有效电平落实到端口层。 [地址、状态来源和下载步骤](32-VGUS-Actuator-Status.md)
+
 ## 2026-11-16 VGUS 六项环境总览
 
 现用屏幕工程位于 `vgus/SmartGrow-VTc`，使用 VGUS2026 编译，开机页为 0。STM32 的 `Vgus_DisplayEnvironment()` 每个周期在灌溉业务处理后发送读数，协议仍是 USART1 115200、8N1、`0x82` 写变量。温湿度地址沿用双卡片版本，显示内容改成数字或 `--` 并由底图提供单位。实物复验已通过。 [地址和实测记录](31-VGUS-Environment-Dashboard.md)

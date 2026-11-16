@@ -56,6 +56,7 @@ void LED_Func(void);
 void LED_Display(void);
 
 void LED_SetPWM(int16_t pwm);
+uint16_t LED_GetDutyPermille(void);
 
 //void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, 
 //              float setpoint, float output_max, float output_min) ;

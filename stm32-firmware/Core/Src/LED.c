@@ -77,6 +77,11 @@ void LED_SetPWM(int16_t pwm) {
         led_ctrl.pwm_value = (uint16_t)pwm;
 }
 
+uint16_t LED_GetDutyPermille(void)
+{
+    return AppConfig_Get()->led_mode == MODE_OFF ? 0U : led_ctrl.pwm_value;
+}
+
 void Mode_Switch(void) 
 {
 	LED_PID_Reset();

@@ -261,6 +261,7 @@ int main(void)
                 {
                     Vgus_DisplayEnvironment(SensorService_GetData(), water_vol);
                 }
+                Vgus_UpdateActuators(HAL_GetTick());
                 now_tick = HAL_GetTick();
                 if (periodic_report_due || AppCommands_ReportDue(now_tick, last_report_attempt_tick, OneNet_IsConnected()))
                 {
