@@ -1,5 +1,7 @@
 # VGUS 灌溉设置
 
+现行固件已把灌溉、温控、光照页面纳入同一套设置读取流程。灌溉沿用下文的地址和校验规则。 [两张新设置页](36-VGUS-Climate-and-Light-Settings.md)
+
 2026-11-16 用户确认本轮实物复测通过。原 [SmartGrow-VTc 工程](../vgus/SmartGrow-VTc/SmartGrow-VTc.vt)新增第 2 页「灌溉设置」，可从「设备状态」进入并返回。滑条分别设置干旱阈值 BL 和湿润阈值 BH，范围均为 0% 到 100%。
 
 ## 调节和回显

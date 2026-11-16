@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## VGUS 温控与光照设置
+
+VGUS 接收模块区分灌溉、温控和光照三个设置区，按当前页面读取待应用值并回显实际配置。配置仍通过原有流程写入 24C02。 [地址和验证](../docs/36-VGUS-Climate-and-Light-Settings.md)
+
 ## VGUS 灌溉设置
 
 串口屏的 BL、BH 应用请求由 USART1 处理。STM32 读取两个待应用值后，用同一批命令验证和应用，继续通过 24C02 保存。 [协议和复验](../docs/35-VGUS-Irrigation-Settings.md)

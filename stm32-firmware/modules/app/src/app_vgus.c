@@ -164,19 +164,42 @@ void Vgus_UpdateActuators(uint32_t now_ms)
     }
 }
 
-/* 收帧只接受 1 字触摸键值或 2 字的灌溉参数读取应答。 */
+/* 0x83 上报一个按键字，或响应一次连续读取 2–3 个待应用值。 */
 #define VGUS_TOUCH_TIMEOUT_MS       25U
-#define VGUS_SOIL_REPLY_TIMEOUT_MS  500U
+#define VGUS_SETTINGS_TIMEOUT_MS    500U
+#define VGUS_SETTINGS_MAX_VALUES    3U
 #define VGUS_LED_KEYS_VP            0x0330U
 #define VGUS_PUMP_KEYS_VP           0x0331U
-#define VGUS_SOIL_DRAFT_VP          0x0340U
-#define VGUS_SOIL_KEYS_VP           0x0342U
-#define VGUS_SOIL_STATUS_VP         0x0350U
 
-enum {
-    VGUS_SOIL_OPEN = 1,
-    VGUS_SOIL_APPLY = 2,
-    VGUS_SOIL_CLOSE = 3
+typedef enum {
+    VGUS_PAGE_CLOSED, VGUS_PAGE_SOIL, VGUS_PAGE_CLIMATE, VGUS_PAGE_LIGHT
+} VgusSettingsPage;
+enum { VGUS_SETTINGS_OPEN = 1, VGUS_SETTINGS_APPLY, VGUS_SETTINGS_CLOSE };
+
+typedef struct {
+    uint16_t draft_vp;
+    uint16_t key_vp;
+    uint16_t status_vp;
+    uint8_t count;
+    AppConfigKey config[VGUS_SETTINGS_MAX_VALUES];
+    const char *conflict_notice;
+} VgusSettingsGroup;
+
+static const VgusSettingsGroup settings_groups[] = {
+    [VGUS_PAGE_SOIL] = {
+        0x0340U, 0x0342U, 0x0350U, 2U, {APP_CFG_SOIL_LOW, APP_CFG_SOIL_HIGH},
+        "\xB8\xC9\xBA\xB5\xB8\xDF\xD3\xDA\xCA\xAA\xC8\xF3" /* 干旱高于湿润 */
+    },
+    [VGUS_PAGE_CLIMATE] = {
+        0x0370U, 0x0373U, 0x0380U, 3U,
+        {APP_CFG_TEMP_LOW_THRESHOLD, APP_CFG_TEMP_THRESHOLD, APP_CFG_CO2_THRESHOLD},
+        "\xCF\xC2\xCF\xDE\xD0\xEB\xD0\xA1\xD3\xDA\xC9\xCF\xCF\xDE" /* 下限须小于上限 */
+    },
+    [VGUS_PAGE_LIGHT] = {
+        0x03A0U, 0x03A3U, 0x03B0U, 3U,
+        {APP_CFG_LIGHT_LOW, APP_CFG_LIGHT_HIGH, APP_CFG_MANUAL_PWM},
+        "\xCF\xC2\xCF\xDE\xB4\xF3\xD3\xDA\xC9\xCF\xCF\xDE" /* 下限大于上限 */
+    }
 };
 
 static const struct {
@@ -188,28 +211,27 @@ static const struct {
     {VGUS_PUMP_KEYS_VP, COMMAND_PUMP, {Bump_OFF, Bump_CALIBRATION, Bump_AUTO}}
 };
 #define VGUS_TOUCH_CONTROL_COUNT (sizeof(touch_controls) / sizeof(touch_controls[0]))
+#define VGUS_SETTINGS_GROUP_COUNT (sizeof(settings_groups) / sizeof(settings_groups[0]))
 
 static uint8_t touch_byte;
 static uint8_t touch_pos;
-static uint8_t touch_frame[11];
+static uint8_t touch_frame[7U + 2U * VGUS_SETTINGS_MAX_VALUES];
 static uint32_t last_touch_byte_ms;
 
-/* 中断只交付完整帧。主循环统一应用模式及阈值。 */
 static volatile uint8_t pending_touch_keys[VGUS_TOUCH_CONTROL_COUNT];
-static volatile uint8_t pending_soil_navigation;
-static volatile uint8_t pending_soil_apply;
-static volatile uint8_t soil_reply_waiting;
-static volatile uint8_t soil_reply_ready;
-static volatile uint32_t soil_reply_started_ms;
-static volatile uint16_t requested_soil_low;
-static volatile uint16_t requested_soil_high;
+static volatile uint8_t settings_navigation_pending;
+static volatile VgusSettingsPage requested_page;
+static volatile VgusSettingsPage apply_page;
+static volatile VgusSettingsPage reply_waiting_for;
+static volatile uint8_t settings_reply_ready;
+static volatile uint32_t settings_reply_started_ms;
+static volatile uint16_t received_values[VGUS_SETTINGS_MAX_VALUES];
 
-static uint8_t soil_page_open;
-static uint8_t soil_seed_due;
-static const char *soil_notice;
-static const char *soil_notice_sent;
-static uint16_t soil_low_sent;
-static uint16_t soil_high_sent;
+static VgusSettingsPage current_settings_page;
+static uint8_t settings_seed_due;
+static const char *settings_notice;
+static const char *settings_notice_sent;
+static uint16_t settings_values_sent[VGUS_SETTINGS_MAX_VALUES];
 
 void Vgus_StartTouch(void)
 {
@@ -219,12 +241,12 @@ void Vgus_StartTouch(void)
 
 static void Vgus_QueueTouchFrame(uint32_t now_ms)
 {
-    if (touch_frame[3] != 0x83U) {
+    if (touch_frame[3] != 0x83U || touch_frame[2] != 4U + 2U * touch_frame[6]) {
         return;
     }
     const uint16_t address = ((uint16_t)touch_frame[4] << 8) | touch_frame[5];
     const uint16_t value = ((uint16_t)touch_frame[7] << 8) | touch_frame[8];
-    if (touch_frame[2] == 6U && touch_frame[6] == 1U) {
+    if (touch_frame[6] == 1U) {
         for (size_t index = 0; index < VGUS_TOUCH_CONTROL_COUNT; ++index) {
             if (address == touch_controls[index].address &&
                 value > 0U && value <= sizeof(touch_controls[index].modes)) {
@@ -232,20 +254,26 @@ static void Vgus_QueueTouchFrame(uint32_t now_ms)
                 return;
             }
         }
-        if (address == VGUS_SOIL_KEYS_VP) {
-            if (value == VGUS_SOIL_OPEN || value == VGUS_SOIL_CLOSE) {
-                pending_soil_navigation = (uint8_t)value;
-                pending_soil_apply = 0U;
-            } else if (value == VGUS_SOIL_APPLY) {
-                pending_soil_apply = 1U;
+        for (size_t index = 1; index < VGUS_SETTINGS_GROUP_COUNT; ++index) {
+            if (address != settings_groups[index].key_vp) continue;
+            if (value == VGUS_SETTINGS_OPEN || value == VGUS_SETTINGS_CLOSE) {
+                requested_page = value == VGUS_SETTINGS_OPEN ? (VgusSettingsPage)index : VGUS_PAGE_CLOSED;
+                settings_navigation_pending = 1U;
+                apply_page = VGUS_PAGE_CLOSED;
+            } else if (value == VGUS_SETTINGS_APPLY) {
+                apply_page = (VgusSettingsPage)index;
             }
+            return;
         }
-    } else if (touch_frame[2] == 8U && touch_frame[6] == 2U &&
-               address == VGUS_SOIL_DRAFT_VP && soil_reply_waiting && !soil_reply_ready &&
-               now_ms - soil_reply_started_ms < VGUS_SOIL_REPLY_TIMEOUT_MS) {
-        requested_soil_low = value;
-        requested_soil_high = ((uint16_t)touch_frame[9] << 8) | touch_frame[10];
-        soil_reply_ready = 1U;
+    } else if (reply_waiting_for != VGUS_PAGE_CLOSED && !settings_reply_ready &&
+               now_ms - settings_reply_started_ms < VGUS_SETTINGS_TIMEOUT_MS) {
+        const VgusSettingsGroup *group = &settings_groups[reply_waiting_for];
+        if (address != group->draft_vp || touch_frame[6] != group->count) return;
+        for (size_t index = 0; index < group->count; ++index) {
+            const size_t offset = 7U + 2U * index;
+            received_values[index] = ((uint16_t)touch_frame[offset] << 8) | touch_frame[offset + 1U];
+        }
+        settings_reply_ready = 1U;
     }
 }
 
@@ -258,17 +286,18 @@ void Vgus_TouchRxComplete(void)
     }
     last_touch_byte_ms = now_ms;
 
-    if (byte == 0xA5U) {
-        /* 当前支持的控件值不会含 0xA5。新帧头可从截断帧立即恢复。 */
-        touch_frame[0] = byte;
-        touch_pos = 1U;
-    } else if ((touch_pos == 1U && byte == 0x5AU) ||
-               (touch_pos == 2U && (byte == 6U || byte == 8U)) || touch_pos >= 3U) {
+    if (touch_pos >= 3U) {
         touch_frame[touch_pos++] = byte;
-        if (touch_pos >= 3U && touch_pos == touch_frame[2] + 3U) {
+        if (touch_pos == touch_frame[2] + 3U) {
             Vgus_QueueTouchFrame(now_ms);
             touch_pos = 0U;
         }
+    } else if (byte == 0xA5U) {
+        touch_frame[0] = byte;
+        touch_pos = 1U;
+    } else if ((touch_pos == 1U && byte == 0x5AU) ||
+               (touch_pos == 2U && (byte == 6U || byte == 8U || byte == 10U))) {
+        touch_frame[touch_pos++] = byte;
     } else {
         touch_pos = 0U;
     }
@@ -282,108 +311,139 @@ void Vgus_TouchRxError(void)
     Vgus_StartTouch();
 }
 
-static void Vgus_SendSoilPage(void)
+static CommandStatus Vgus_ApplySettings(VgusSettingsPage page, const uint16_t *values)
 {
-    const RuntimeConfig *config = AppConfig_Get();
-    if (soil_seed_due) {
-        uint8_t draft[] = {
-            0xA5U, 0x5AU, 7U, 0x82U, VGUS_SOIL_DRAFT_VP >> 8, (uint8_t)VGUS_SOIL_DRAFT_VP,
-            0U, (uint8_t)config->soil_low, 0U, (uint8_t)config->soil_high
-        };
-        if (HAL_UART_Transmit(&huart1, draft, sizeof(draft), VGUS_TX_TIMEOUT_MS) != HAL_OK) {
-            return;
-        }
-        soil_seed_due = 0U;
+    if (page == VGUS_PAGE_SOIL) {
+        const CommandEntry entries[] = {{COMMAND_SOIL_LOW, values[0]}, {COMMAND_SOIL_HIGH, values[1]}};
+        return AppCommands_Execute(entries, 2U).status;
     }
-    if (soil_notice == soil_notice_sent && config->soil_low == soil_low_sent &&
-        config->soil_high == soil_high_sent) {
-        return;
+    if (page == VGUS_PAGE_CLIMATE) {
+        const CommandEntry entries[] = {
+            {COMMAND_TEMP_LOW, values[0]}, {COMMAND_TEMP, values[1]}, {COMMAND_CO2, values[2]}
+        };
+        return AppCommands_Execute(entries, 3U).status;
     }
 
-    uint8_t frame[6U + 3U * VGUS_TEXT_SLOT_BYTES] = {
-        0xA5U, 0x5AU, sizeof(frame) - 3U, 0x82U,
-        VGUS_SOIL_STATUS_VP >> 8, (uint8_t)VGUS_SOIL_STATUS_VP
+    /* 光照告警上下限和标准亮度是本地配置。先验证三项，再按可应用的次序写入。 */
+    if (values[0] > 9999U || values[1] > 9999U || values[2] > 100U) return COMMAND_OUT_OF_RANGE;
+    if (values[0] > values[1]) return COMMAND_CONFLICT;
+    if (values[0] > AppConfig_Get()->ldr_high) {
+        (void)AppConfig_Set(APP_CFG_LIGHT_HIGH, values[1]);
+        (void)AppConfig_Set(APP_CFG_LIGHT_LOW, values[0]);
+    } else {
+        (void)AppConfig_Set(APP_CFG_LIGHT_LOW, values[0]);
+        (void)AppConfig_Set(APP_CFG_LIGHT_HIGH, values[1]);
+    }
+    (void)AppConfig_Set(APP_CFG_MANUAL_PWM, values[2]);
+    return COMMAND_OK;
+}
+
+static void Vgus_SendSettingsPage(const VgusSettingsGroup *group)
+{
+    uint16_t current[VGUS_SETTINGS_MAX_VALUES] = {0};
+    for (size_t index = 0; index < group->count; ++index) {
+        int32_t value;
+        if (!AppConfig_GetValue(group->config[index], &value)) return;
+        current[index] = (uint16_t)value;
+    }
+
+    if (settings_seed_due) {
+        uint8_t draft[6U + 2U * VGUS_SETTINGS_MAX_VALUES] = {
+            0xA5U, 0x5AU, 3U + 2U * group->count, 0x82U,
+            (uint8_t)(group->draft_vp >> 8), (uint8_t)group->draft_vp
+        };
+        for (size_t index = 0; index < group->count; ++index) {
+            draft[6U + 2U * index] = (uint8_t)(current[index] >> 8);
+            draft[7U + 2U * index] = (uint8_t)current[index];
+        }
+        if (HAL_UART_Transmit(&huart1, draft, 6U + 2U * group->count, VGUS_TX_TIMEOUT_MS) != HAL_OK) return;
+        settings_seed_due = 0U;
+    }
+    if (settings_notice == settings_notice_sent &&
+        memcmp(current, settings_values_sent, sizeof(current)) == 0) return;
+
+    const uint16_t size = 6U + (1U + group->count) * VGUS_TEXT_SLOT_BYTES;
+    uint8_t frame[6U + (1U + VGUS_SETTINGS_MAX_VALUES) * VGUS_TEXT_SLOT_BYTES] = {
+        0xA5U, 0x5AU, (uint8_t)(size - 3U), 0x82U,
+        (uint8_t)(group->status_vp >> 8), (uint8_t)group->status_vp
     };
     char *const notice = (char *)&frame[6];
-    char *const low = notice + VGUS_TEXT_SLOT_BYTES;
-    char *const high = low + VGUS_TEXT_SLOT_BYTES;
-    const size_t notice_len = strlen(soil_notice);
-    memcpy(notice, soil_notice, notice_len);
+    const size_t notice_len = strlen(settings_notice);
+    memcpy(notice, settings_notice, notice_len);
     Vgus_FinishTextSlot(notice, notice_len);
-    const int low_len = snprintf(low, VGUS_TEXT_SLOT_BYTES, "%u%%", (unsigned)config->soil_low);
-    const int high_len = snprintf(high, VGUS_TEXT_SLOT_BYTES, "%u%%", (unsigned)config->soil_high);
-    if (low_len < 0 || high_len < 0 || low_len > 14 || high_len > 14) {
-        return;
+    const char *format = current_settings_page == VGUS_PAGE_SOIL ? "%u%%" : "%u";
+    for (size_t index = 0; index < group->count; ++index) {
+        char *slot = notice + (1U + index) * VGUS_TEXT_SLOT_BYTES;
+        const int length = snprintf(slot, VGUS_TEXT_SLOT_BYTES, format, (unsigned)current[index]);
+        if (length < 0 || length > 14) return;
+        Vgus_FinishTextSlot(slot, (size_t)length);
     }
-    Vgus_FinishTextSlot(low, (size_t)low_len);
-    Vgus_FinishTextSlot(high, (size_t)high_len);
-    if (HAL_UART_Transmit(&huart1, frame, sizeof(frame), VGUS_STATUS_TIMEOUT_MS) == HAL_OK) {
-        soil_notice_sent = soil_notice;
-        soil_low_sent = config->soil_low;
-        soil_high_sent = config->soil_high;
+    if (HAL_UART_Transmit(&huart1, frame, size, VGUS_STATUS_TIMEOUT_MS) == HAL_OK) {
+        settings_notice_sent = settings_notice;
+        memcpy(settings_values_sent, current, sizeof(current));
     }
 }
 
-static void Vgus_ProcessSoilSettings(void)
+static void Vgus_ProcessSettings(void)
 {
+    uint16_t values[VGUS_SETTINGS_MAX_VALUES];
     const uint32_t now_ms = HAL_GetTick();
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
-    const uint8_t navigation = pending_soil_navigation;
-    const uint8_t apply = pending_soil_apply;
-    const uint8_t reply = soil_reply_ready;
-    const uint16_t low = requested_soil_low;
-    const uint16_t high = requested_soil_high;
-    const uint8_t timed_out = soil_reply_waiting &&
-        now_ms - soil_reply_started_ms >= VGUS_SOIL_REPLY_TIMEOUT_MS;
-    pending_soil_navigation = 0U;
-    pending_soil_apply = 0U;
-    soil_reply_ready = 0U;
-    if (navigation || reply || timed_out) {
-        soil_reply_waiting = 0U;
+    const uint8_t navigation = settings_navigation_pending;
+    const VgusSettingsPage next_page = requested_page;
+    const VgusSettingsPage apply = apply_page;
+    const uint8_t reply = settings_reply_ready;
+    for (size_t index = 0; index < VGUS_SETTINGS_MAX_VALUES; ++index) {
+        values[index] = received_values[index];
     }
+    const uint8_t timed_out = reply_waiting_for != VGUS_PAGE_CLOSED &&
+        now_ms - settings_reply_started_ms >= VGUS_SETTINGS_TIMEOUT_MS;
+    settings_navigation_pending = 0U;
+    apply_page = VGUS_PAGE_CLOSED;
+    settings_reply_ready = 0U;
+    if (navigation || reply || timed_out) reply_waiting_for = VGUS_PAGE_CLOSED;
     __set_PRIMASK(primask);
 
     if (navigation) {
-        soil_page_open = navigation == VGUS_SOIL_OPEN;
-        soil_seed_due = soil_page_open;
-        soil_notice = "\xD2\xD1\xB6\xC1\xC8\xA1"; /* 已读取 */
-        soil_notice_sent = NULL;
+        current_settings_page = next_page;
+        settings_seed_due = next_page != VGUS_PAGE_CLOSED;
+        settings_notice = "\xD2\xD1\xB6\xC1\xC8\xA1"; /* 已读取 */
+        settings_notice_sent = NULL;
     }
-    if (!soil_page_open) {
-        return;
-    }
+    if (current_settings_page == VGUS_PAGE_CLOSED) return;
 
+    const VgusSettingsGroup *group = &settings_groups[current_settings_page];
     if (!navigation && reply) {
-        const CommandEntry commands[] = {{COMMAND_SOIL_LOW, low}, {COMMAND_SOIL_HIGH, high}};
-        const CommandStatus status = AppCommands_Execute(commands, 2U).status;
-        switch (status) {
-            case COMMAND_OK: soil_notice = "\xD2\xD1\xC9\xFA\xD0\xA7"; break; /* 已生效 */
-            case COMMAND_CONFLICT: soil_notice = "\xB8\xC9\xBA\xB5\xB8\xDF\xD3\xDA\xCA\xAA\xC8\xF3"; break; /* 干旱高于湿润 */
-            case COMMAND_OUT_OF_RANGE: soil_notice = "\xB3\xAC\xB3\xF6\xB7\xB6\xCE\xA7"; break; /* 超出范围 */
-            default: soil_notice = "\xD3\xA6\xD3\xC3\xCA\xA7\xB0\xDC"; break; /* 应用失败 */
+        switch (Vgus_ApplySettings(current_settings_page, values)) {
+            case COMMAND_OK: settings_notice = "\xD2\xD1\xC9\xFA\xD0\xA7"; break; /* 已生效 */
+            case COMMAND_CONFLICT: settings_notice = group->conflict_notice; break;
+            case COMMAND_OUT_OF_RANGE: settings_notice = "\xB3\xAC\xB3\xF6\xB7\xB6\xCE\xA7"; break; /* 超出范围 */
+            default: settings_notice = "\xD3\xA6\xD3\xC3\xCA\xA7\xB0\xDC"; break; /* 应用失败 */
         }
     } else if (!navigation && timed_out) {
-        soil_notice = "\xB6\xC1\xC8\xA1\xB3\xAC\xCA\xB1"; /* 读取超时 */
-    } else if (!navigation && apply && !soil_seed_due && !soil_reply_waiting) {
+        settings_notice = "\xB6\xC1\xC8\xA1\xB3\xAC\xCA\xB1"; /* 读取超时 */
+    } else if (!navigation && apply == current_settings_page && !settings_seed_due &&
+               reply_waiting_for == VGUS_PAGE_CLOSED) {
         uint8_t read[] = {
-            0xA5U, 0x5AU, 4U, 0x83U, VGUS_SOIL_DRAFT_VP >> 8, (uint8_t)VGUS_SOIL_DRAFT_VP, 2U
+            0xA5U, 0x5AU, 4U, 0x83U, (uint8_t)(group->draft_vp >> 8),
+            (uint8_t)group->draft_vp, group->count
         };
         __disable_irq();
-        soil_reply_started_ms = now_ms;
-        soil_reply_waiting = 1U;
+        settings_reply_started_ms = now_ms;
+        reply_waiting_for = current_settings_page;
         __set_PRIMASK(primask);
         if (HAL_UART_Transmit(&huart1, read, sizeof(read), VGUS_TX_TIMEOUT_MS) == HAL_OK) {
-            soil_notice = "\xD3\xA6\xD3\xC3\xD6\xD0"; /* 应用中 */
+            settings_notice = "\xD3\xA6\xD3\xC3\xD6\xD0"; /* 应用中 */
         } else {
             __disable_irq();
-            soil_reply_waiting = 0U;
-            soil_reply_ready = 0U;
+            reply_waiting_for = VGUS_PAGE_CLOSED;
+            settings_reply_ready = 0U;
             __set_PRIMASK(primask);
-            soil_notice = "\xCD\xA8\xD0\xC5\xCA\xA7\xB0\xDC"; /* 通信失败 */
+            settings_notice = "\xCD\xA8\xD0\xC5\xCA\xA7\xB0\xDC"; /* 通信失败 */
         }
     }
-    Vgus_SendSoilPage();
+    Vgus_SendSettingsPage(group);
 }
 
 void Vgus_ProcessTouch(void)
@@ -409,5 +469,5 @@ void Vgus_ProcessTouch(void)
     if (count != 0U) {
         (void)AppCommands_Execute(commands, count);
     }
-    Vgus_ProcessSoilSettings();
+    Vgus_ProcessSettings();
 }

@@ -1,5 +1,9 @@
 # STM32-IOT-Harmony
 
+## VGUS 温控与光照设置
+
+串口屏可调整加热下限、通风上限、CO₂ 阈值、光照告警上下限和标准模式亮度。支持滑动粗调与逐单位微调。 [页面、协议与实测](docs/36-VGUS-Climate-and-Light-Settings.md)
+
 ## VGUS 灌溉设置
 
 可在串口屏滑动选择干旱和湿润阈值，成对应用后查看 STM32 的确认值。 [配置与复验](docs/35-VGUS-Irrigation-Settings.md)
