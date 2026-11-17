@@ -15,6 +15,18 @@ typedef enum {
 /* 初始化阶段和主循环均可调用，屏幕独立重启后也会收到最新提示。 */
 void Vgus_UpdateLinkStatus(VgusLinkState state, uint32_t now_ms);
 
+typedef enum {
+    VGUS_RESET_UNKNOWN, VGUS_RESET_POWER, VGUS_RESET_PIN, VGUS_RESET_SOFTWARE,
+    VGUS_RESET_WATCHDOG, VGUS_RESET_LOW_POWER
+} VgusResetCause;
+
+typedef enum {
+    VGUS_DIAG_AT, VGUS_DIAG_IP, VGUS_DIAG_TCP, VGUS_DIAG_MQTT, VGUS_DIAG_STAGE_COUNT
+} VgusDiagnosticStage;
+
+void Vgus_SetResetCause(VgusResetCause cause);
+void Vgus_RecordNetworkResult(VgusDiagnosticStage stage, uint8_t succeeded);
+
 /* USART1 初始化后，每个采集周期发送一次环境读数与现有补水估算。 */
 void Vgus_DisplayEnvironment(const SensorData *sensors, float water_volume_l, uint32_t sampled_ms);
 

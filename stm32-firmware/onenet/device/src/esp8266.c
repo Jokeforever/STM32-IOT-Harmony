@@ -284,9 +284,11 @@ unsigned char *ESP8266_GetIPD(unsigned short timeOut)
 //
 //	说明：		
 //==========================================================
-void ESP8266_Init(void)
+Esp8266InitResult ESP8266_Init(void)
 {
 	uint8_t retry = 0;
+	_Bool failed;
+	Esp8266InitResult result;
 
 	ESP8266_Clear();
 	OLED_Clear();
@@ -294,8 +296,13 @@ void ESP8266_Init(void)
 	UsartPrintf(USART_DEBUG, "1. AT\r\n");
 	OLED_ShowString(0,0,"1. AT...",7);
 	retry = 0;
-	while(ESP8266_SendCmd("AT\r\n", "OK") && retry++ < 5)
+	failed = ESP8266_SendCmd("AT\r\n", "OK");
+	while(failed && retry++ < 5)
+	{
 		HAL_Delay(500);
+		failed = ESP8266_SendCmd("AT\r\n", "OK");
+	}
+	result.at_ok = !failed;
 
 	UsartPrintf(USART_DEBUG, "2. CWMODE\r\n");
 	OLED_ShowString(0,2,"2. CWMODE...",7);
@@ -311,14 +318,17 @@ void ESP8266_Init(void)
 
 	OLED_ShowString(0,6,"4. CWJAP...",7);
 	retry = 0;
-	while(ESP8266_SendCmd(ESP8266_WIFI_INFO, "GOT IP") && retry++ < 3)
+	failed = ESP8266_SendCmd(ESP8266_WIFI_INFO, "GOT IP");
+	while(failed && retry++ < 3)
 	{
 		OLED_ShowString(0,6,"WiFi FAIL",7);
 		HAL_Delay(1000);
 		OLED_ShowString(0,6,"4. CWJAP...",7);
+		failed = ESP8266_SendCmd(ESP8266_WIFI_INFO, "GOT IP");
 	}
 
-	if(retry >= 3)
+	result.wifi_ip_ok = !failed;
+	if(failed)
 	{
 		OLED_ShowString(0,6,"WiFi FAIL",7);
 	}
@@ -328,6 +338,7 @@ void ESP8266_Init(void)
 	}
 
 	HAL_Delay(800);
+	return result;
 }
 //==========================================================
 //	函数名称：	USART2_IRQHandler

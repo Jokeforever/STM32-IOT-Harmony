@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## VGUS 设备诊断
+
+第 17 页显示 STM32 复位原因、运行时长、网络阶段结果和传感器状态。主控区分上次建连的实际结果和当前 OneNET 连接状态。 [诊断字段和串口约定](../docs/41-VGUS-Device-Diagnostics.md)
+
 ## VGUS 温湿度趋势
 
 主控沿用环境采样节奏，保留最近 30 轮温湿度，向串口屏第 16 页发送按采样时刻排列的线段。 [采集规则与串口地址](../docs/40-VGUS-Temperature-Humidity-Trends.md)

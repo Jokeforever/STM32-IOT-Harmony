@@ -9,7 +9,12 @@
 #define REV_WAIT	1	//接收未完成标志
 
 
-void ESP8266_Init(void);
+typedef struct {
+    _Bool at_ok;
+    _Bool wifi_ip_ok;
+} Esp8266InitResult;
+
+Esp8266InitResult ESP8266_Init(void);
 
 void ESP8266_Clear(void);
 

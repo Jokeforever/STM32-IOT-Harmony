@@ -1,5 +1,9 @@
 # 项目 AI 交接文档
 
+## 2026-11-17 串口屏设备诊断
+
+原 SmartGrow-VTc 第 1 页可进第 17 页。`main.c` 捕获 RCC 复位标志和 TCP、MQTT 结果，`ESP8266_Init()` 返回 AT 和获取 IP 结果。`app_vgus.c` 汇总后以 `0x0688` 为首地址写入 11 格，换板时可复用页面和协议。 [状态含义与串口地址](41-VGUS-Device-Diagnostics.md)
+
 ## 2026-11-17 串口屏温湿度趋势
 
 原 SmartGrow-VTc 第 13 页新增「趋势」入口，第 16 页通过 `0x04F0` 上报进出。环境采集时间传入 `Vgus_DisplayEnvironment()`，由 `app_vgus.c` 保留 30 轮，并以 `0x82` 写入独立图形和文本。换板可复用页面、变量地址和坐标规则。 [变量地址与验证](40-VGUS-Temperature-Humidity-Trends.md)

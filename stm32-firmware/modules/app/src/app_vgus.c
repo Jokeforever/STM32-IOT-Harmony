@@ -56,11 +56,14 @@ static void Vgus_WriteReading(uint16_t address, uint8_t valid, const char *forma
     (void)HAL_UART_Transmit(&huart1, frame, sizeof(frame), VGUS_TX_TIMEOUT_MS);
 }
 
+static VgusLinkState diagnostic_link_state;
+static void Vgus_RecordDiagnosticSample(const SensorData *sensors);
 static void Vgus_RecordTrend(const SensorData *sensors, uint32_t sampled_ms);
 
 void Vgus_DisplayEnvironment(const SensorData *sensors, float water_volume_l, uint32_t sampled_ms)
 {
     Vgus_RecordTrend(sensors, sampled_ms);
+    Vgus_RecordDiagnosticSample(sensors);
     Vgus_WriteReading(VGUS_TEMPERATURE_VP, sensors->valid_mask & SENSOR_VALID_TEMP,
                       "%u", (unsigned)sensors->temperature_c);
     Vgus_WriteReading(VGUS_HUMIDITY_VP, sensors->valid_mask & SENSOR_VALID_HUMI,
@@ -184,6 +187,7 @@ void Vgus_UpdateLinkStatus(VgusLinkState state, uint32_t now_ms)
     if ((unsigned)state >= sizeof(labels) / sizeof(labels[0])) {
         return;
     }
+    diagnostic_link_state = state;
     if (sent && state == previous_state && now_ms - last_send_ms < VGUS_STATUS_RESEND_MS) {
         return;
     }
@@ -621,6 +625,155 @@ static void Vgus_SendTrend(uint32_t now_ms)
     trend_dirty = retrying;
 }
 
+#define VGUS_DIAG_KEYS_VP    0x0680U
+#define VGUS_DIAG_INFO_VP    0x0688U
+#define VGUS_DIAG_SLOTS      11U
+#define VGUS_DIAG_TX_MS      23U
+
+enum { VGUS_DIAG_OPEN = 1U, VGUS_DIAG_CLOSE = 2U };
+typedef enum { DIAG_NOT_TRIED, DIAG_OK, DIAG_FAILED } DiagnosticResult;
+
+typedef struct {
+    uint32_t last_valid_sec;
+    uint8_t seen_valid;
+    uint8_t valid;
+} DiagnosticSensor;
+
+static VgusResetCause diagnostic_reset_cause;
+static DiagnosticResult diagnostic_network[VGUS_DIAG_STAGE_COUNT];
+static DiagnosticSensor diagnostic_sensors[2];
+static uint8_t diagnostic_sampled;
+static uint8_t diagnostic_open;
+static uint8_t diagnostic_due = 1U;
+static volatile uint8_t diagnostic_navigation;
+
+void Vgus_SetResetCause(VgusResetCause cause)
+{
+    diagnostic_reset_cause = cause;
+}
+
+void Vgus_RecordNetworkResult(VgusDiagnosticStage stage, uint8_t succeeded)
+{
+    if ((unsigned)stage < VGUS_DIAG_STAGE_COUNT) {
+        diagnostic_network[stage] = succeeded ? DIAG_OK : DIAG_FAILED;
+    }
+}
+
+static uint32_t Vgus_DiagnosticSeconds(uint32_t now_ms)
+{
+    static uint32_t last_ms;
+    static uint32_t seconds;
+    static uint16_t remaining_ms;
+    const uint32_t elapsed_ms = now_ms - last_ms;
+    const uint16_t fraction = remaining_ms + elapsed_ms % 1000U;
+    last_ms = now_ms;
+    seconds += elapsed_ms / 1000U + fraction / 1000U;
+    remaining_ms = fraction % 1000U;
+    return seconds;
+}
+
+static void Vgus_RecordDiagnosticSample(const SensorData *sensors)
+{
+    const uint32_t now_sec = Vgus_DiagnosticSeconds(HAL_GetTick());
+    const uint8_t valid_mask = sensors->valid_mask;
+    const uint8_t valid[] = {
+        (valid_mask & (SENSOR_VALID_TEMP | SENSOR_VALID_HUMI)) == (SENSOR_VALID_TEMP | SENSOR_VALID_HUMI),
+        (valid_mask & SENSOR_VALID_CO2) != 0U
+    };
+    diagnostic_sampled = 1U;
+    for (size_t i = 0U; i < sizeof(valid) / sizeof(valid[0]); ++i) {
+        DiagnosticSensor *const sensor = &diagnostic_sensors[i];
+        sensor->valid = valid[i];
+        if (sensor->valid) {
+            sensor->last_valid_sec = now_sec;
+            sensor->seen_valid = 1U;
+        }
+    }
+}
+
+static void Vgus_PutDiagnosticAge(char *slot, uint32_t sec)
+{
+    const int length = sec < 3600U
+        ? snprintf(slot, VGUS_TEXT_SLOT_BYTES, "%u s", (unsigned)sec)
+        : snprintf(slot, VGUS_TEXT_SLOT_BYTES, "%u h", (unsigned)(sec / 3600U));
+    if (length < 0 || length > 14) {
+        Vgus_PutAlarmLabel(slot, "--");
+        return;
+    }
+    Vgus_FinishTextSlot(slot, (size_t)length, VGUS_TEXT_SLOT_BYTES);
+}
+
+static void Vgus_SendDiagnostics(uint32_t now_ms)
+{
+    static uint32_t last_attempt_ms;
+    static uint8_t retrying;
+    const uint32_t now_sec = Vgus_DiagnosticSeconds(now_ms);
+    if ((!diagnostic_due && (!diagnostic_open || now_ms - last_attempt_ms < VGUS_STATUS_RESEND_MS)) ||
+        (retrying && now_ms - last_attempt_ms < VGUS_STATUS_POLL_MS)) {
+        return;
+    }
+
+    static const char *const reset_labels[] = {
+        [VGUS_RESET_UNKNOWN] = "\xCE\xB4\xD6\xAA" /* 未知 */,
+        [VGUS_RESET_POWER] = "\xB5\xE7\xD4\xB4\xB8\xB4\xCE\xBB" /* 电源复位 */,
+        [VGUS_RESET_PIN] = "\xD2\xFD\xBD\xC5\xB8\xB4\xCE\xBB" /* 引脚复位 */,
+        [VGUS_RESET_SOFTWARE] = "\xC8\xED\xBC\xFE\xB8\xB4\xCE\xBB" /* 软件复位 */,
+        [VGUS_RESET_WATCHDOG] = "\xBF\xB4\xC3\xC5\xB9\xB7\xB8\xB4\xCE\xBB" /* 看门狗复位 */,
+        [VGUS_RESET_LOW_POWER] = "\xB5\xCD\xB9\xA6\xBA\xC4\xB8\xB4\xCE\xBB" /* 低功耗复位 */
+    };
+    static const char *const link_labels[] = {
+        [VGUS_LINK_INITIALIZING] = "\xB3\xF5\xCA\xBC\xBB\xAF" /* 初始化 */,
+        [VGUS_LINK_CONNECTING_WIFI] = "\xC1\xAC\xBD\xD3\xD6\xD0" /* 连接中 */,
+        [VGUS_LINK_CONNECTING_CLOUD] = "\xC1\xAC\xBD\xD3\xD6\xD0" /* 连接中 */,
+        [VGUS_LINK_ONLINE] = "\xD4\xDA\xCF\xDF" /* 在线 */,
+        [VGUS_LINK_LOCAL_ONLY] = "\xC0\xEB\xCF\xDF" /* 离线 */
+    };
+    static const char *const results[] = {
+        [DIAG_NOT_TRIED] = "\xCE\xB4\xB3\xA2\xCA\xD4" /* 未尝试 */,
+        [DIAG_OK] = "\xB3\xC9\xB9\xA6" /* 成功 */,
+        [DIAG_FAILED] = "\xCA\xA7\xB0\xDC" /* 失败 */
+    };
+    const char *const reset_label = (unsigned)diagnostic_reset_cause < sizeof(reset_labels) / sizeof(reset_labels[0])
+        ? reset_labels[diagnostic_reset_cause] : reset_labels[VGUS_RESET_UNKNOWN];
+    uint8_t frame[6U + VGUS_DIAG_SLOTS * VGUS_TEXT_SLOT_BYTES] = {
+        0xA5U, 0x5AU, sizeof(frame) - 3U, 0x82U, VGUS_DIAG_INFO_VP >> 8, (uint8_t)VGUS_DIAG_INFO_VP
+    };
+    char *slot = (char *)frame + 6U;
+    const int time_length = snprintf(slot, VGUS_TEXT_SLOT_BYTES, "%02u:%02u:%02u",
+                                    (unsigned)(now_sec / 3600U), (unsigned)(now_sec / 60U % 60U),
+                                    (unsigned)(now_sec % 60U));
+    if (time_length < 0 || time_length > 14) {
+        Vgus_PutAlarmLabel(slot, "--");
+    } else {
+        Vgus_FinishTextSlot(slot, (size_t)time_length, VGUS_TEXT_SLOT_BYTES);
+    }
+    slot += VGUS_TEXT_SLOT_BYTES;
+    Vgus_PutAlarmLabel(slot, reset_label);
+    slot += VGUS_TEXT_SLOT_BYTES;
+    Vgus_PutAlarmLabel(slot, link_labels[diagnostic_link_state]);
+    slot += VGUS_TEXT_SLOT_BYTES;
+    for (size_t i = 0U; i < VGUS_DIAG_STAGE_COUNT; ++i) {
+        Vgus_PutAlarmLabel(slot, results[diagnostic_network[i]]);
+        slot += VGUS_TEXT_SLOT_BYTES;
+    }
+    for (size_t i = 0U; i < sizeof(diagnostic_sensors) / sizeof(diagnostic_sensors[0]); ++i) {
+        const DiagnosticSensor *const sensor = &diagnostic_sensors[i];
+        const char *const label = !diagnostic_sampled ? "\xB4\xFD\xB2\xC9\xBC\xAF" /* 待采集 */ :
+            sensor->valid ? "\xD3\xD0\xD0\xA7" /* 有效 */ : alarm_no_data;
+        Vgus_PutAlarmLabel(slot, label);
+        slot += VGUS_TEXT_SLOT_BYTES;
+        if (sensor->seen_valid) {
+            Vgus_PutDiagnosticAge(slot, now_sec - sensor->last_valid_sec);
+        } else {
+            Vgus_PutAlarmLabel(slot, "--");
+        }
+        slot += VGUS_TEXT_SLOT_BYTES;
+    }
+    last_attempt_ms = now_ms;
+    retrying = HAL_UART_Transmit(&huart1, frame, sizeof(frame), VGUS_DIAG_TX_MS) != HAL_OK;
+    diagnostic_due = retrying;
+}
+
 /* 0x83 上报一个按键字，或响应一次连续读取 2–3 个待应用值。 */
 #define VGUS_TOUCH_TIMEOUT_MS       25U
 #define VGUS_SETTINGS_TIMEOUT_MS    500U
@@ -704,6 +857,10 @@ static void Vgus_QueueTouchFrame(uint32_t now_ms)
     const uint16_t address = ((uint16_t)touch_frame[4] << 8) | touch_frame[5];
     const uint16_t value = ((uint16_t)touch_frame[7] << 8) | touch_frame[8];
     if (touch_frame[6] == 1U) {
+        if (address == VGUS_DIAG_KEYS_VP && (value == VGUS_DIAG_OPEN || value == VGUS_DIAG_CLOSE)) {
+            diagnostic_navigation = (uint8_t)value;
+            return;
+        }
         if (address == VGUS_TREND_KEYS_VP && (value == VGUS_TREND_OPEN || value == VGUS_TREND_CLOSE)) {
             trend_navigation = (uint8_t)value;
             return;
@@ -924,6 +1081,8 @@ void Vgus_ProcessTouch(void)
     history_open_requested = 0U;
     const uint8_t trend_requested = trend_navigation;
     trend_navigation = 0U;
+    const uint8_t diagnostic_requested = diagnostic_navigation;
+    diagnostic_navigation = 0U;
     __set_PRIMASK(primask);
 
     CommandEntry commands[VGUS_TOUCH_CONTROL_COUNT];
@@ -949,4 +1108,9 @@ void Vgus_ProcessTouch(void)
         trend_dirty = trend_open;
     }
     Vgus_SendTrend(now_ms);
+    if (diagnostic_requested != 0U) {
+        diagnostic_open = diagnostic_requested == VGUS_DIAG_OPEN;
+        diagnostic_due = diagnostic_open;
+    }
+    Vgus_SendDiagnostics(now_ms);
 }

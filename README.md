@@ -1,5 +1,9 @@
 # STM32-IOT-Harmony
 
+## VGUS 设备诊断
+
+从串口屏设备状态页可进入只读诊断，查看最近一次复位、各联网阶段结果和传感器采集状态。 [字段、地址与实测](docs/41-VGUS-Device-Diagnostics.md)
+
 ## VGUS 温湿度趋势
 
 串口屏首页可查看温湿度短时趋势。上下分图显示最新值、动态纵轴及采样缺口，在断网时也可查看。 [采样、通信与实测](docs/40-VGUS-Temperature-Humidity-Trends.md)

@@ -120,6 +120,30 @@ void Watchdog_Feed(void);
 /* 采集与滤波状态由 modules/app/src/app_sensors.c 管理。 */
 
 
+static VgusResetCause Diagnostics_ResetCause(uint32_t flags)
+{
+    if (flags & (RCC_CSR_IWDGRSTF | RCC_CSR_WWDGRSTF)) return VGUS_RESET_WATCHDOG;
+    if (flags & RCC_CSR_SFTRSTF) return VGUS_RESET_SOFTWARE;
+    if (flags & RCC_CSR_LPWRRSTF) return VGUS_RESET_LOW_POWER;
+    if (flags & RCC_CSR_PORRSTF) return VGUS_RESET_POWER;
+    if (flags & RCC_CSR_PINRSTF) return VGUS_RESET_PIN;
+    return VGUS_RESET_UNKNOWN;
+}
+
+static _Bool ConnectOneNetTcp(void)
+{
+    const _Bool failed = ESP8266_SendCmd(ESP8266_ONENET_INFO, "CONNECT");
+    Vgus_RecordNetworkResult(VGUS_DIAG_TCP, !failed);
+    return failed;
+}
+
+static _Bool LoginOneNetMqtt(void)
+{
+    const _Bool failed = OneNet_DevLink();
+    Vgus_RecordNetworkResult(VGUS_DIAG_MQTT, !failed);
+    return failed;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -130,7 +154,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  Vgus_SetResetCause(Diagnostics_ResetCause(RCC->CSR));
+  __HAL_RCC_CLEAR_RESET_FLAGS();
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -180,22 +205,28 @@ int main(void)
 	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_2);
 	Mode_Switch();
 	Vgus_UpdateLinkStatus(VGUS_LINK_CONNECTING_WIFI, HAL_GetTick());
-	ESP8266_Init();	
+	const Esp8266InitResult wifi_start = ESP8266_Init();
+	Vgus_RecordNetworkResult(VGUS_DIAG_AT, wifi_start.at_ok);
+	Vgus_RecordNetworkResult(VGUS_DIAG_IP, wifi_start.wifi_ip_ok);
 	OLED_Clear();
 	OLED_ShowString(0,0,(uint8_t*)" Connect MQTTs Server...",16);
 	Vgus_UpdateLinkStatus(VGUS_LINK_CONNECTING_CLOUD, HAL_GetTick());
 	net_retry = 0;
-	while(ESP8266_SendCmd(ESP8266_ONENET_INFO, "CONNECT") && net_retry++ < 5)
+	_Bool tcp_failed = ConnectOneNetTcp();
+	while(tcp_failed && net_retry++ < 5)
+	{
 		delay_ms(500);
-	OLED_ShowString(0,4,(uint8_t*)" Connect MQTT Server Success...",16);
+		tcp_failed = ConnectOneNetTcp();
+	}
+	OLED_ShowString(0,4,(uint8_t*)(tcp_failed ? "Connect TCP Fail" : "Connect TCP OK"),16);
 		delay_ms(500);
 	OLED_Clear();
 	OLED_ShowString(0,3,(uint8_t*)" Device login...",16);
 	//等待onenet平台连接
 	login_retry = 0;
-	while(OneNet_DevLink() && login_retry++ < 5)	
+	while(LoginOneNetMqtt() && login_retry++ < 5)
 	{
-		ESP8266_SendCmd(ESP8266_ONENET_INFO, "CONNECT");
+		(void)ConnectOneNetTcp();
 		delay_ms(500);
 	}		//接入OneNET
 		delay_ms(500);
@@ -238,9 +269,9 @@ int main(void)
 		   (HAL_GetTick() - last_reconnect_tick >= 10000))
 		{
 			last_reconnect_tick = HAL_GetTick();
-			if(ESP8266_SendCmd(ESP8266_ONENET_INFO, "CONNECT") == 0)
+			if(ConnectOneNetTcp() == 0)
 			{
-				if(OneNet_DevLink() == 0)
+				if(LoginOneNetMqtt() == 0)
 				{
 					OneNET_Subscribe();
 				}
