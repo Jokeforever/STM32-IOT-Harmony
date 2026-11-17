@@ -167,6 +167,7 @@ int main(void)
 	unsigned char *dataPtr = NULL;
 	uint8_t net_retry = 0;
 	uint8_t login_retry = 0;
+	uint8_t alarm_data_ready = 0U;
 	Vgus_UpdateLinkStatus(VGUS_LINK_INITIALIZING, HAL_GetTick());
 	AppConfig_Init();
 	SensorService_Init();
@@ -252,6 +253,7 @@ int main(void)
         {
             last_upload_tick = now_tick;
             SensorService_Poll();
+            alarm_data_ready = 1U;
         }
         /* 命令先处理，输出业务更新后再上报；事件上报不推迟5秒采集时钟。 */
 
@@ -269,6 +271,9 @@ int main(void)
                     Vgus_DisplayEnvironment(SensorService_GetData(), water_vol);
                 }
                 Vgus_UpdateActuators(HAL_GetTick());
+                if (alarm_data_ready) {
+                    Vgus_UpdateAlarms(HAL_GetTick(), SensorService_GetData(), abnormal);
+                }
                 now_tick = HAL_GetTick();
                 if (periodic_report_due || AppCommands_ReportDue(now_tick, last_report_attempt_tick, OneNet_IsConnected()))
                 {

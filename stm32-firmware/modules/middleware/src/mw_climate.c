@@ -12,7 +12,7 @@ void Climate_Reset(ClimateState *state)
 uint8_t Climate_Evaluate(const SensorData *data, const ClimateLimits *limits,
                          ClimateState *state, ClimateDemand *out)
 {
-    if (out != NULL) { out->fan_on = 0U; out->heater_on = 0U; }
+    if (out != NULL) { out->fan_on = 0U; out->heater_on = 0U; out->fan_reasons = 0U; }
     if (data == NULL || limits == NULL || state == NULL || out == NULL ||
         limits->temp_high_c > 100U || limits->temp_low_c >= limits->temp_high_c) {
         Climate_Reset(state);
@@ -33,8 +33,10 @@ uint8_t Climate_Evaluate(const SensorData *data, const ClimateLimits *limits,
         if (data->temperature_c < limits->temp_low_c) state->heating = 1U;
         else if ((int16_t)data->temperature_c >= (int16_t)limits->temp_low_c + 1) state->heating = 0U;
     }
-    out->fan_on = (uint8_t)(state->cooling ||
-        ((data->valid_mask & SENSOR_VALID_CO2) != 0U && data->co2_ppm > limits->co2_threshold));
+    if (state->cooling) out->fan_reasons |= CLIMATE_FAN_TEMP;
+    if ((data->valid_mask & SENSOR_VALID_CO2) != 0U && data->co2_ppm > limits->co2_threshold)
+        out->fan_reasons |= CLIMATE_FAN_CO2;
+    out->fan_on = out->fan_reasons != 0U;
     out->heater_on = state->heating;
     return 1U;
 }

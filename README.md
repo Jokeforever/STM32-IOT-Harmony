@@ -1,5 +1,9 @@
 # STM32-IOT-Harmony
 
+## VGUS 告警与动作原因
+
+串口屏首页显示当前告警项数，点开可查询光照、土壤湿度、CO₂ 与温度的阈值、状态，以及风扇和加热的触发原因。 [页面、协议与实测](docs/38-VGUS-Alarms-and-Actuator-Reasons.md)
+
 ## VGUS 开机动画与联网提示
 
 串口屏上电约一秒进入环境监测，首页显示等待主控、连接进度、云端在线或离线本地可控。 [动画、协议与实测](docs/37-VGUS-Boot-Animation-and-Link-Status.md)

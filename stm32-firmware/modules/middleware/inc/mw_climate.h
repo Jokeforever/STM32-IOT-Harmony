@@ -17,7 +17,8 @@ typedef struct {
     uint8_t last_high_c;
     uint8_t last_low_c;
 } ClimateState;
-typedef struct { uint8_t fan_on; uint8_t heater_on; } ClimateDemand;
+enum { CLIMATE_FAN_TEMP = 1U, CLIMATE_FAN_CO2 = 2U };
+typedef struct { uint8_t fan_on; uint8_t heater_on; uint8_t fan_reasons; } ClimateDemand;
 void Climate_Reset(ClimateState *state);
 /* 超上限开，降至上限-1关；低于下限开，升至下限+1关。
  * 温度失效清除两项温度请求；CO2独立按有效位与严格超限请求通风。

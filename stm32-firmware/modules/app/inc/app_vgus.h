@@ -2,6 +2,7 @@
 #define APP_VGUS_H
 
 #include "sensor_data.h"
+#include "mw_alarm.h"
 
 typedef enum {
     VGUS_LINK_INITIALIZING,
@@ -19,6 +20,8 @@ void Vgus_DisplayEnvironment(const SensorData *sensors, float water_volume_l);
 
 /* 主循环执行控制逻辑后调用。 */
 void Vgus_UpdateActuators(uint32_t now_ms);
+void Vgus_UpdateAlarms(uint32_t now_ms, const SensorData *sensors,
+                       const volatile Abnormal alarm_states[ALARM_COUNT]);
 
 /* 主循环开始后接收触摸；两个回调仅用于 USART1 中断。 */
 void Vgus_StartTouch(void);

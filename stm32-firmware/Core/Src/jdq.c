@@ -6,11 +6,13 @@
 #include "mw_climate_port.h"
 
 static ClimateState climate_state;
+static uint8_t fan_reasons;
 
 
 void JDQ_Init(void)
 {
     Climate_Reset(&climate_state);
+    fan_reasons = 0U;
     ClimatePort_SetHeater(0U);
 }
 
@@ -24,6 +26,12 @@ void Monitor_Temp(void)
     limits.co2_threshold = config->co2_threshold;
     (void)Climate_Evaluate(SensorService_GetData(), &limits, &climate_state, &demand);
     /* 两个请求独立：低温和CO2超限时允许同时通风/加热。 */
+    fan_reasons = demand.fan_reasons;
     ClimatePort_SetFan(demand.fan_on);
     ClimatePort_SetHeater(demand.heater_on);
+}
+
+uint8_t Climate_GetFanReasons(void)
+{
+    return fan_reasons;
 }

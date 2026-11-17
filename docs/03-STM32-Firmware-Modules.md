@@ -1,5 +1,9 @@
 # STM32 端代码功能讲解（完整版）
 
+## VGUS 告警数据链路
+
+`mw_climate.c` 在计算风扇需求时保留高温和 CO₂ 的原因位，`jdq.c` 提供 `Climate_GetFanReasons()` 供屏端回显。`app_vgus.c` 在首轮采集后，将这两个原因位、加热输出、各项已有告警和当前配置编码为一帧。 [触发规则、字地址与复验](38-VGUS-Alarms-and-Actuator-Reasons.md)
+
 ## USART1 在官方 VGUS 示例显示温湿度
 
 STM32 在采集后通过 USART1 写入官方示例「文本变量」页的 0x0200 和 0x0240。实屏照片显示温度 21°C、相对湿度 64%，用户随后确认 VGUS 屏与 OLED 随采集同步更新。 [验收记录](29-VGUS-Temp-Humi.md)

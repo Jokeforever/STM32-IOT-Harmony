@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## VGUS 告警与动作原因
+
+`Vgus_UpdateAlarms()` 用主控的传感器数据、告警判断和温控状态更新屏幕。`Climate_GetFanReasons()` 提供高温、CO₂ 两个原因位。 [数据来源与变量地址](../docs/38-VGUS-Alarms-and-Actuator-Reasons.md)
+
 ## VGUS 开机与联网状态回显
 
 `Vgus_UpdateLinkStatus()` 将启动阶段及 OneNET 连接标志传给环境监测页。开机动画由原串口屏工程播放，主控继续执行原有启动流程。 [状态和串口地址](../docs/37-VGUS-Boot-Animation-and-Link-Status.md)

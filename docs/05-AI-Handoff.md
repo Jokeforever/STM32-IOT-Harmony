@@ -1,5 +1,9 @@
 # 项目 AI 交接文档
 
+## 2026-11-17 串口屏告警与动作原因
+
+原 SmartGrow-VTc 第 13 页新增告警入口，进入第 14 页。`Vgus_UpdateAlarms()` 在 `Monitor_Temp()` 和 `IS_Normal()` 后读取同一轮结果。主控将告警数、四类读数与阈值及原因写入 `0x03E0` 起的 15 个文本槽。换板时可复用第 13、14 页的跳转和文本协议。 [协议和复验](38-VGUS-Alarms-and-Actuator-Reasons.md)
+
 ## 2026-11-16 串口屏开机动画与联网提示
 
 原 SmartGrow-VTc 开机页为 5，八张动画帧占第 5–12 页，环境监测首页为第 13 页。设备状态返回第 13 页。主控通过 `Vgus_UpdateLinkStatus()` 写 `0x03D0`，启动阶段在 main.c 分别汇报初始化、连接 Wi-Fi 和连接云端，主循环根据 OneNET 连接标志更新。换板时，屏端素材、页号和串口约定可复用。 [协议与复验](37-VGUS-Boot-Animation-and-Link-Status.md)
