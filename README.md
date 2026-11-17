@@ -1,5 +1,9 @@
 # STM32-IOT-Harmony
 
+## VGUS 告警记录
+
+从串口屏告警页可查看本次开机最近 6 条触发与恢复事件，包含发生时的读数和主控运行时间。 [记录规则与复验](docs/39-VGUS-Alarm-History.md)
+
 ## VGUS 告警与动作原因
 
 串口屏首页显示当前告警项数，点开可查询光照、土壤湿度、CO₂ 与温度的阈值、状态，以及风扇和加热的触发原因。 [页面、协议与实测](docs/38-VGUS-Alarms-and-Actuator-Reasons.md)

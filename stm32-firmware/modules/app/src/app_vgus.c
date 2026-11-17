@@ -22,9 +22,9 @@
 #define VGUS_TX_TIMEOUT_MS    5U
 
 /* 整个字槽都重写，内容缩短时不会留下前一帧的字符。 */
-static void Vgus_FinishTextSlot(char *payload, size_t length)
+static void Vgus_FinishTextSlot(char *payload, size_t length, size_t capacity)
 {
-    memset(payload + length, ' ', VGUS_TEXT_SLOT_BYTES - length);
+    memset(payload + length, ' ', capacity - length);
     const size_t text_end = (length + 1U) & ~(size_t)1U;
     ((uint8_t *)payload)[text_end] = 0xFFU;
     ((uint8_t *)payload)[text_end + 1U] = 0xFFU;
@@ -52,7 +52,7 @@ static void Vgus_WriteReading(uint16_t address, uint8_t valid, const char *forma
         }
     }
 
-    Vgus_FinishTextSlot(payload, (size_t)length);
+    Vgus_FinishTextSlot(payload, (size_t)length, VGUS_TEXT_SLOT_BYTES);
     (void)HAL_UART_Transmit(&huart1, frame, sizeof(frame), VGUS_TX_TIMEOUT_MS);
 }
 
@@ -151,7 +151,7 @@ void Vgus_UpdateActuators(uint32_t now_ms)
         const size_t length = strlen(rows[index]);
         char *const slot = status + index * VGUS_TEXT_SLOT_BYTES;
         memcpy(slot, rows[index], length);
-        Vgus_FinishTextSlot(slot, length);
+        Vgus_FinishTextSlot(slot, length, VGUS_TEXT_SLOT_BYTES);
     }
 
     /* 变化时发送，同一快照定期重发，支持串口屏独立复位。 */
@@ -191,7 +191,7 @@ void Vgus_UpdateLinkStatus(VgusLinkState state, uint32_t now_ms)
     char *const text = (char *)&frame[6];
     const size_t length = strlen(labels[state]);
     memcpy(text, labels[state], length);
-    Vgus_FinishTextSlot(text, length);
+    Vgus_FinishTextSlot(text, length, VGUS_TEXT_SLOT_BYTES);
     if (HAL_UART_Transmit(&huart1, frame, sizeof(frame), VGUS_TX_TIMEOUT_MS) == HAL_OK) {
         previous_state = state;
         last_send_ms = now_ms;
@@ -204,6 +204,27 @@ void Vgus_UpdateLinkStatus(VgusLinkState state, uint32_t now_ms)
 #define VGUS_ALARM_FIELDS    3U
 #define VGUS_ALARM_SLOTS     (1U + VGUS_ALARM_ROWS * VGUS_ALARM_FIELDS + 2U)
 #define VGUS_ALARM_TX_MS     28U
+#define VGUS_HISTORY_KEYS_VP 0x0460U
+#define VGUS_HISTORY_VP      0x0470U
+#define VGUS_HISTORY_COUNT   6U
+#define VGUS_HISTORY_DETAIL_BYTES 24U
+#define VGUS_HISTORY_ROW_BYTES (VGUS_TEXT_SLOT_BYTES + VGUS_HISTORY_DETAIL_BYTES)
+#define VGUS_HISTORY_TX_MS   28U
+
+enum { VGUS_TEMP_COOLING = HIGHCO2 + 1, VGUS_TEMP_HEATING };
+
+typedef struct {
+    uint32_t elapsed_s;
+    uint16_t reading;
+    uint8_t row;
+    uint8_t state;
+} VgusAlarmEvent;
+
+static VgusAlarmEvent alarm_history[VGUS_HISTORY_COUNT];
+static uint8_t history_next;
+static uint8_t history_count;
+static uint8_t history_dirty = 1U;
+static volatile uint8_t history_open_requested;
 
 /* 静态文案用 GB2312，屏幕第 14 页和首页告警数共用这份快照。 */
 static const char alarm_normal[] = "\xD5\xFD\xB3\xA3";
@@ -225,7 +246,7 @@ static void Vgus_PutAlarmLabel(char *slot, const char *label)
 {
     const size_t length = strlen(label);
     memcpy(slot, label, length);
-    Vgus_FinishTextSlot(slot, length);
+    Vgus_FinishTextSlot(slot, length, VGUS_TEXT_SLOT_BYTES);
 }
 
 static void Vgus_PutAlarmValue(char *slot, uint16_t first, uint16_t last, uint8_t is_range)
@@ -237,7 +258,89 @@ static void Vgus_PutAlarmValue(char *slot, uint16_t first, uint16_t last, uint8_
         Vgus_PutAlarmLabel(slot, "--");
         return;
     }
-    Vgus_FinishTextSlot(slot, (size_t)length);
+    Vgus_FinishTextSlot(slot, (size_t)length, VGUS_TEXT_SLOT_BYTES);
+}
+
+static void Vgus_RecordAlarmChanges(uint32_t now_ms, const uint16_t readings[VGUS_ALARM_ROWS],
+                                   const uint8_t states[VGUS_ALARM_ROWS],
+                                   const uint8_t valid[VGUS_ALARM_ROWS])
+{
+    static uint8_t last_valid_states[VGUS_ALARM_ROWS];
+    static uint32_t last_ms;
+    static uint64_t elapsed_ms;
+
+    /* 按无符号差值累加，HAL 的 32 位毫秒计数回绕后仍能连续计时。 */
+    elapsed_ms += (uint32_t)(now_ms - last_ms);
+    last_ms = now_ms;
+    for (uint8_t row = 0U; row < VGUS_ALARM_ROWS; ++row) {
+        if (!valid[row] || states[row] == last_valid_states[row]) {
+            continue;
+        }
+        last_valid_states[row] = states[row];
+        alarm_history[history_next] = (VgusAlarmEvent){
+            (uint32_t)(elapsed_ms / 1000U), readings[row], row, states[row]
+        };
+        history_next = (history_next + 1U) % VGUS_HISTORY_COUNT;
+        if (history_count < VGUS_HISTORY_COUNT) {
+            ++history_count;
+        }
+        history_dirty = 1U;
+    }
+}
+
+static void Vgus_SendAlarmHistory(uint32_t now_ms)
+{
+    static uint8_t retrying;
+    static uint32_t last_attempt_ms;
+    if (!history_dirty || (retrying && now_ms - last_attempt_ms < VGUS_STATUS_POLL_MS)) {
+        return;
+    }
+    static const char *const recovery_labels[VGUS_ALARM_ROWS] = {
+        "\xB9\xE2\xD5\xD5\xBB\xD6\xB8\xB4" /* 光照恢复 */, "\xCD\xC1\xC8\xC0\xBB\xD6\xB8\xB4" /* 土壤恢复 */,
+        "\x43\x4F\x32\xBB\xD6\xB8\xB4" /* CO2恢复 */, "\xCE\xC2\xB6\xC8\xBB\xD6\xB8\xB4" /* 温度恢复 */
+    };
+    static const char *const event_labels[] = {
+        [BRIGHT] = "\xB9\xE2\xD5\xD5\xC6\xAB\xC1\xC1" /* 光照偏亮 */,
+        [DARK] = "\xB9\xE2\xD5\xD5\xC6\xAB\xB0\xB5" /* 光照偏暗 */,
+        [DAMP] = "\xCD\xC1\xC8\xC0\xC6\xAB\xCA\xAA" /* 土壤偏湿 */,
+        [DROUGHT] = "\xCD\xC1\xC8\xC0\xC6\xAB\xB8\xC9" /* 土壤偏干 */,
+        [HIGHCO2] = "\x43\x4F\x32\xB3\xAC\xCF\xDE" /* CO2超限 */,
+        [VGUS_TEMP_COOLING] = "\xB8\xDF\xCE\xC2\xCD\xA8\xB7\xE7" /* 高温通风 */,
+        [VGUS_TEMP_HEATING] = "\xB5\xCD\xCE\xC2\xBC\xD3\xC8\xC8" /* 低温加热 */
+    };
+    static const char *const units[VGUS_ALARM_ROWS] = {" lx", "%", " ppm", "\xA1\xE6" /* ℃ */};
+
+    uint8_t frame[6U + VGUS_HISTORY_COUNT * VGUS_HISTORY_ROW_BYTES] = {
+        0xA5U, 0x5AU, sizeof(frame) - 3U, 0x82U, VGUS_HISTORY_VP >> 8, (uint8_t)VGUS_HISTORY_VP
+    };
+    for (uint8_t row = 0U; row < VGUS_HISTORY_COUNT; ++row) {
+        char *const time = (char *)&frame[6U + row * VGUS_HISTORY_ROW_BYTES];
+        char *const detail = time + VGUS_TEXT_SLOT_BYTES;
+        size_t time_length = 0U;
+        size_t detail_length = 0U;
+        if (row < history_count) {
+            const uint8_t index = (history_next + VGUS_HISTORY_COUNT - 1U - row) % VGUS_HISTORY_COUNT;
+            const VgusAlarmEvent *const event = &alarm_history[index];
+            const uint32_t sec = event->elapsed_s;
+            time_length = (size_t)snprintf(time, VGUS_TEXT_SLOT_BYTES, "%02u:%02u:%02u",
+                                         (unsigned)(sec / 3600U), (unsigned)(sec / 60U % 60U),
+                                         (unsigned)(sec % 60U));
+            const char *const label = event->state == NONE
+                ? recovery_labels[event->row] : event_labels[event->state];
+            detail_length = (size_t)snprintf(detail, VGUS_HISTORY_DETAIL_BYTES, "%s %u%s",
+                                           label, (unsigned)event->reading, units[event->row]);
+        } else if (row == 0U) {
+            static const char empty[] = "\xD4\xDD\xCE\xDE\xB8\xE6\xBE\xAF\xBC\xC7\xC2\xBC" /* 暂无告警记录 */;
+            detail_length = sizeof(empty) - 1U;
+            memcpy(detail, empty, detail_length);
+        }
+        Vgus_FinishTextSlot(time, time_length <= VGUS_TEXT_SLOT_BYTES - 2U ? time_length : 0U, VGUS_TEXT_SLOT_BYTES);
+        Vgus_FinishTextSlot(detail, detail_length <= VGUS_HISTORY_DETAIL_BYTES - 2U ? detail_length : 0U,
+                            VGUS_HISTORY_DETAIL_BYTES);
+    }
+    last_attempt_ms = now_ms;
+    retrying = HAL_UART_Transmit(&huart1, frame, sizeof(frame), VGUS_HISTORY_TX_MS) != HAL_OK;
+    history_dirty = retrying;
 }
 
 void Vgus_UpdateAlarms(uint32_t now_ms, const SensorData *sensors,
@@ -248,6 +351,23 @@ void Vgus_UpdateAlarms(uint32_t now_ms, const SensorData *sensors,
     static uint8_t sent;
     static uint8_t polled;
     static uint8_t previous[VGUS_ALARM_SLOTS * VGUS_TEXT_SLOT_BYTES];
+    const uint8_t fan_reasons = Climate_GetFanReasons();
+    const uint8_t heat_on = ClimatePort_GetHeaterOutput();
+    const uint8_t temp_cooling = (fan_reasons & CLIMATE_FAN_TEMP) != 0U;
+    const uint8_t valid[VGUS_ALARM_ROWS] = {
+        1U, 1U, (sensors->valid_mask & SENSOR_VALID_CO2) != 0U,
+        (sensors->valid_mask & SENSOR_VALID_TEMP) != 0U
+    };
+    const uint16_t readings[VGUS_ALARM_ROWS] = {
+        sensors->light_lux, sensors->soil_moisture_pct, sensors->co2_ppm, sensors->temperature_c
+    };
+    const uint8_t states[VGUS_ALARM_ROWS] = {
+        (uint8_t)alarm_states[ALARM_LIGHT_INDEX], (uint8_t)alarm_states[ALARM_SOIL_INDEX],
+        alarm_states[ALARM_CO2_INDEX] == HIGHCO2 ? HIGHCO2 : NONE,
+        temp_cooling ? VGUS_TEMP_COOLING : heat_on ? VGUS_TEMP_HEATING : NONE
+    };
+
+    Vgus_RecordAlarmChanges(now_ms, readings, states, valid);
     if (polled && now_ms - last_poll_ms < VGUS_STATUS_POLL_MS) {
         return;
     }
@@ -255,32 +375,20 @@ void Vgus_UpdateAlarms(uint32_t now_ms, const SensorData *sensors,
     last_poll_ms = now_ms;
 
     const RuntimeConfig *config = AppConfig_Get();
-    const uint8_t fan_reasons = Climate_GetFanReasons();
-    const uint8_t heat_on = ClimatePort_GetHeaterOutput();
-    const uint8_t temp_cooling = (fan_reasons & CLIMATE_FAN_TEMP) != 0U;
-    const uint8_t temp_valid = (sensors->valid_mask & SENSOR_VALID_TEMP) != 0U;
-    const uint8_t co2_valid = (sensors->valid_mask & SENSOR_VALID_CO2) != 0U;
-    const Abnormal light = alarm_states[ALARM_LIGHT_INDEX];
-    const Abnormal soil = alarm_states[ALARM_SOIL_INDEX];
-    const uint8_t co2_alarm = co2_valid && alarm_states[ALARM_CO2_INDEX] == HIGHCO2;
-    const uint8_t alarm_count = (light != NONE) + (soil != NONE) + co2_alarm +
-                                (temp_valid && (temp_cooling || heat_on));
     const struct {
-        uint16_t reading;
         uint16_t lower;
         uint16_t upper;
-        uint8_t valid;
         uint8_t range;
-        const char *status;
-    } rows[VGUS_ALARM_ROWS] = {
-        {sensors->light_lux, config->ldr_low, config->ldr_high, 1U, 1U,
-         light == BRIGHT ? alarm_bright : light == DARK ? alarm_dark : alarm_normal},
-        {sensors->soil_moisture_pct, config->soil_low, config->soil_high, 1U, 1U,
-         soil == DAMP ? alarm_damp : soil == DROUGHT ? alarm_dry : alarm_normal},
-        {sensors->co2_ppm, config->co2_threshold, 0U, co2_valid, 0U,
-         co2_alarm ? alarm_above : alarm_normal},
-        {sensors->temperature_c, config->temp_low_threshold, config->temp_threshold, temp_valid, 1U,
-         temp_cooling ? alarm_cooling : heat_on ? alarm_heating : alarm_normal}
+    } limits[VGUS_ALARM_ROWS] = {
+        {config->ldr_low, config->ldr_high, 1U},
+        {config->soil_low, config->soil_high, 1U},
+        {config->co2_threshold, 0U, 0U},
+        {config->temp_low_threshold, config->temp_threshold, 1U}
+    };
+    static const char *const statuses[] = {
+        [NONE] = alarm_normal, [BRIGHT] = alarm_bright, [DARK] = alarm_dark,
+        [DAMP] = alarm_damp, [DROUGHT] = alarm_dry, [HIGHCO2] = alarm_above,
+        [VGUS_TEMP_COOLING] = alarm_cooling, [VGUS_TEMP_HEATING] = alarm_heating
     };
     static const char *const fan_labels[] = {
         [0] = alarm_idle,
@@ -293,18 +401,19 @@ void Vgus_UpdateAlarms(uint32_t now_ms, const SensorData *sensors,
         0xA5U, 0x5AU, sizeof(frame) - 3U, 0x82U, VGUS_ALARMS_VP >> 8, (uint8_t)VGUS_ALARMS_VP
     };
     char *const payload = (char *)&frame[6];
-    Vgus_PutAlarmValue(payload, alarm_count, 0U, 0U);
+    uint8_t alarm_count = 0U;
     for (size_t index = 0; index < VGUS_ALARM_ROWS; ++index) {
         char *const slot = payload + (1U + index * VGUS_ALARM_FIELDS) * VGUS_TEXT_SLOT_BYTES;
-        if (rows[index].valid) {
-            Vgus_PutAlarmValue(slot, rows[index].reading, 0U, 0U);
+        if (valid[index]) {
+            Vgus_PutAlarmValue(slot, readings[index], 0U, 0U);
+            alarm_count += states[index] != NONE;
         } else {
             Vgus_PutAlarmLabel(slot, "--");
         }
-        Vgus_PutAlarmValue(slot + VGUS_TEXT_SLOT_BYTES, rows[index].lower, rows[index].upper, rows[index].range);
-        Vgus_PutAlarmLabel(slot + 2U * VGUS_TEXT_SLOT_BYTES,
-                           rows[index].valid ? rows[index].status : alarm_no_data);
+        Vgus_PutAlarmValue(slot + VGUS_TEXT_SLOT_BYTES, limits[index].lower, limits[index].upper, limits[index].range);
+        Vgus_PutAlarmLabel(slot + 2U * VGUS_TEXT_SLOT_BYTES, valid[index] ? statuses[states[index]] : alarm_no_data);
     }
+    Vgus_PutAlarmValue(payload, alarm_count, 0U, 0U);
     Vgus_PutAlarmLabel(payload + (VGUS_ALARM_SLOTS - 2U) * VGUS_TEXT_SLOT_BYTES,
                        fan_labels[fan_reasons & (CLIMATE_FAN_TEMP | CLIMATE_FAN_CO2)]);
     Vgus_PutAlarmLabel(payload + (VGUS_ALARM_SLOTS - 1U) * VGUS_TEXT_SLOT_BYTES,
@@ -403,6 +512,10 @@ static void Vgus_QueueTouchFrame(uint32_t now_ms)
     const uint16_t address = ((uint16_t)touch_frame[4] << 8) | touch_frame[5];
     const uint16_t value = ((uint16_t)touch_frame[7] << 8) | touch_frame[8];
     if (touch_frame[6] == 1U) {
+        if (address == VGUS_HISTORY_KEYS_VP && value == 1U) {
+            history_open_requested = 1U;
+            return;
+        }
         for (size_t index = 0; index < VGUS_TOUCH_CONTROL_COUNT; ++index) {
             if (address == touch_controls[index].address &&
                 value > 0U && value <= sizeof(touch_controls[index].modes)) {
@@ -526,13 +639,13 @@ static void Vgus_SendSettingsPage(const VgusSettingsGroup *group)
     char *const notice = (char *)&frame[6];
     const size_t notice_len = strlen(settings_notice);
     memcpy(notice, settings_notice, notice_len);
-    Vgus_FinishTextSlot(notice, notice_len);
+    Vgus_FinishTextSlot(notice, notice_len, VGUS_TEXT_SLOT_BYTES);
     const char *format = current_settings_page == VGUS_PAGE_SOIL ? "%u%%" : "%u";
     for (size_t index = 0; index < group->count; ++index) {
         char *slot = notice + (1U + index) * VGUS_TEXT_SLOT_BYTES;
         const int length = snprintf(slot, VGUS_TEXT_SLOT_BYTES, format, (unsigned)current[index]);
         if (length < 0 || length > 14) return;
-        Vgus_FinishTextSlot(slot, (size_t)length);
+        Vgus_FinishTextSlot(slot, (size_t)length, VGUS_TEXT_SLOT_BYTES);
     }
     if (HAL_UART_Transmit(&huart1, frame, size, VGUS_STATUS_TIMEOUT_MS) == HAL_OK) {
         settings_notice_sent = settings_notice;
@@ -611,6 +724,8 @@ void Vgus_ProcessTouch(void)
         keys[index] = pending_touch_keys[index];
         pending_touch_keys[index] = 0U;
     }
+    const uint8_t history_open = history_open_requested;
+    history_open_requested = 0U;
     __set_PRIMASK(primask);
 
     CommandEntry commands[VGUS_TOUCH_CONTROL_COUNT];
@@ -626,4 +741,8 @@ void Vgus_ProcessTouch(void)
         (void)AppCommands_Execute(commands, count);
     }
     Vgus_ProcessSettings();
+    if (history_open) {
+        history_dirty = 1U;
+    }
+    Vgus_SendAlarmHistory(HAL_GetTick());
 }

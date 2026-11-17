@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## VGUS 告警记录
+
+STM32 在 `app_vgus.c` 中维护本次开机最近 6 条状态变化，以原有判断结果驱动列表。记录由 `0x82` 写入屏幕第 15 页。 [存储和串口地址](../docs/39-VGUS-Alarm-History.md)
+
 ## VGUS 告警与动作原因
 
 `Vgus_UpdateAlarms()` 用主控的传感器数据、告警判断和温控状态更新屏幕。`Climate_GetFanReasons()` 提供高温、CO₂ 两个原因位。 [数据来源与变量地址](../docs/38-VGUS-Alarms-and-Actuator-Reasons.md)

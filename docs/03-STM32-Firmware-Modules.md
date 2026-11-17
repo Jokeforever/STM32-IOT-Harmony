@@ -1,5 +1,9 @@
 # STM32 端代码功能讲解（完整版）
 
+## VGUS 告警记录链路
+
+`Vgus_RecordAlarmChanges()` 从实时告警的读数、有效位和状态检测变化，写入 6 项 RAM 环形缓冲区。`Vgus_ProcessTouch()` 处理记录页进入请求，并发送由最近事件生成的列表。 [状态、地址与复验](39-VGUS-Alarm-History.md)
+
 ## VGUS 告警数据链路
 
 `mw_climate.c` 在计算风扇需求时保留高温和 CO₂ 的原因位，`jdq.c` 提供 `Climate_GetFanReasons()` 供屏端回显。`app_vgus.c` 在首轮采集后，将这两个原因位、加热输出、各项已有告警和当前配置编码为一帧。 [触发规则、字地址与复验](38-VGUS-Alarms-and-Actuator-Reasons.md)
