@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## VGUS 温湿度趋势
+
+主控沿用环境采样节奏，保留最近 30 轮温湿度，向串口屏第 16 页发送按采样时刻排列的线段。 [采集规则与串口地址](../docs/40-VGUS-Temperature-Humidity-Trends.md)
+
 ## VGUS 告警记录
 
 STM32 在 `app_vgus.c` 中维护本次开机最近 6 条状态变化，以原有判断结果驱动列表。记录由 `0x82` 写入屏幕第 15 页。 [存储和串口地址](../docs/39-VGUS-Alarm-History.md)

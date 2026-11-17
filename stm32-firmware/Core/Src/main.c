@@ -268,7 +268,7 @@ int main(void)
 				IS_Normal();
                 if (periodic_report_due)
                 {
-                    Vgus_DisplayEnvironment(SensorService_GetData(), water_vol);
+                    Vgus_DisplayEnvironment(SensorService_GetData(), water_vol, now_tick);
                 }
                 Vgus_UpdateActuators(HAL_GetTick());
                 if (alarm_data_ready) {

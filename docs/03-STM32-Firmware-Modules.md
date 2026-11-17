@@ -1,5 +1,9 @@
 # STM32 端代码功能讲解（完整版）
 
+## VGUS 温湿度趋势链路
+
+`main.c` 的周期采集路径将读数和采样时刻传给 `Vgus_DisplayEnvironment()`。`app_vgus.c` 用 30 项环形缓冲区保留有效位和读数，在进页或有新样本时计算显示窗口和线段。 [数据来源与绘制规则](40-VGUS-Temperature-Humidity-Trends.md)
+
 ## VGUS 告警记录链路
 
 `Vgus_RecordAlarmChanges()` 从实时告警的读数、有效位和状态检测变化，写入 6 项 RAM 环形缓冲区。`Vgus_ProcessTouch()` 处理记录页进入请求，并发送由最近事件生成的列表。 [状态、地址与复验](39-VGUS-Alarm-History.md)

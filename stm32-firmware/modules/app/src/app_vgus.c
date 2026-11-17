@@ -56,8 +56,11 @@ static void Vgus_WriteReading(uint16_t address, uint8_t valid, const char *forma
     (void)HAL_UART_Transmit(&huart1, frame, sizeof(frame), VGUS_TX_TIMEOUT_MS);
 }
 
-void Vgus_DisplayEnvironment(const SensorData *sensors, float water_volume_l)
+static void Vgus_RecordTrend(const SensorData *sensors, uint32_t sampled_ms);
+
+void Vgus_DisplayEnvironment(const SensorData *sensors, float water_volume_l, uint32_t sampled_ms)
 {
+    Vgus_RecordTrend(sensors, sampled_ms);
     Vgus_WriteReading(VGUS_TEMPERATURE_VP, sensors->valid_mask & SENSOR_VALID_TEMP,
                       "%u", (unsigned)sensors->temperature_c);
     Vgus_WriteReading(VGUS_HUMIDITY_VP, sensors->valid_mask & SENSOR_VALID_HUMI,
@@ -249,7 +252,7 @@ static void Vgus_PutAlarmLabel(char *slot, const char *label)
     Vgus_FinishTextSlot(slot, length, VGUS_TEXT_SLOT_BYTES);
 }
 
-static void Vgus_PutAlarmValue(char *slot, uint16_t first, uint16_t last, uint8_t is_range)
+static void Vgus_PutNumericText(char *slot, uint16_t first, uint16_t last, uint8_t is_range)
 {
     const int length = is_range
         ? snprintf(slot, VGUS_TEXT_SLOT_BYTES, "%u-%u", (unsigned)first, (unsigned)last)
@@ -405,15 +408,15 @@ void Vgus_UpdateAlarms(uint32_t now_ms, const SensorData *sensors,
     for (size_t index = 0; index < VGUS_ALARM_ROWS; ++index) {
         char *const slot = payload + (1U + index * VGUS_ALARM_FIELDS) * VGUS_TEXT_SLOT_BYTES;
         if (valid[index]) {
-            Vgus_PutAlarmValue(slot, readings[index], 0U, 0U);
+            Vgus_PutNumericText(slot, readings[index], 0U, 0U);
             alarm_count += states[index] != NONE;
         } else {
             Vgus_PutAlarmLabel(slot, "--");
         }
-        Vgus_PutAlarmValue(slot + VGUS_TEXT_SLOT_BYTES, limits[index].lower, limits[index].upper, limits[index].range);
+        Vgus_PutNumericText(slot + VGUS_TEXT_SLOT_BYTES, limits[index].lower, limits[index].upper, limits[index].range);
         Vgus_PutAlarmLabel(slot + 2U * VGUS_TEXT_SLOT_BYTES, valid[index] ? statuses[states[index]] : alarm_no_data);
     }
-    Vgus_PutAlarmValue(payload, alarm_count, 0U, 0U);
+    Vgus_PutNumericText(payload, alarm_count, 0U, 0U);
     Vgus_PutAlarmLabel(payload + (VGUS_ALARM_SLOTS - 2U) * VGUS_TEXT_SLOT_BYTES,
                        fan_labels[fan_reasons & (CLIMATE_FAN_TEMP | CLIMATE_FAN_CO2)]);
     Vgus_PutAlarmLabel(payload + (VGUS_ALARM_SLOTS - 1U) * VGUS_TEXT_SLOT_BYTES,
@@ -427,6 +430,195 @@ void Vgus_UpdateAlarms(uint32_t now_ms, const SensorData *sensors,
         last_send_ms = now_ms;
         sent = 1U;
     }
+}
+
+#define VGUS_TREND_KEYS_VP       0x04F0U
+#define VGUS_TREND_LABELS_VP     0x04F8U
+#define VGUS_TREND_TEMP_VP       0x0540U
+#define VGUS_TREND_HUMI_VP       0x05E0U
+#define VGUS_TREND_SAMPLES      30U
+#define VGUS_TREND_WINDOW_MS    150000U
+#define VGUS_TREND_MAX_GAP_MS  10000U
+#define VGUS_TREND_MAX_DATA     244U
+#define VGUS_TREND_TX_MS        28U
+#define VGUS_TREND_X_LEFT       58U
+#define VGUS_TREND_X_RIGHT      448U
+#define VGUS_TREND_HEIGHT       46U
+#define VGUS_TREND_LABELS       3U
+
+enum { VGUS_TREND_OPEN = 1U, VGUS_TREND_CLOSE = 2U };
+
+typedef struct {
+    uint32_t sampled_ms;
+    uint8_t value[2];
+    uint8_t valid_mask;
+} VgusTrendSample;
+
+typedef struct {
+    uint16_t vp;
+    uint16_t color;
+    uint16_t top;
+    uint16_t min_span;
+    uint16_t ceiling;
+    uint16_t default_max;
+    uint8_t valid_bit;
+} VgusTrendSeries;
+
+static const VgusTrendSeries trend_series[] = {
+    {VGUS_TREND_TEMP_VP, 0xBBA5U, 91U, 6U, 255U, 50U, SENSOR_VALID_TEMP},
+    {VGUS_TREND_HUMI_VP, 0x1BCFU, 188U, 10U, 100U, 100U, SENSOR_VALID_HUMI}
+};
+
+static VgusTrendSample trend_samples[VGUS_TREND_SAMPLES];
+static uint8_t trend_next;
+static uint8_t trend_count;
+static uint8_t trend_open;
+static uint8_t trend_dirty = 1U;
+static volatile uint8_t trend_navigation;
+
+static void Vgus_RecordTrend(const SensorData *sensors, uint32_t sampled_ms)
+{
+    uint8_t valid = sensors->valid_mask;
+    if (sensors->humidity_pct > 100U) {
+        valid &= (uint8_t)~SENSOR_VALID_HUMI;
+    }
+    trend_samples[trend_next] = (VgusTrendSample){
+        sampled_ms, {sensors->temperature_c, sensors->humidity_pct}, valid
+    };
+    trend_next = (trend_next + 1U) % VGUS_TREND_SAMPLES;
+    if (trend_count < VGUS_TREND_SAMPLES) {
+        ++trend_count;
+    }
+    if (trend_open) {
+        trend_dirty = 1U;
+    }
+}
+
+static const VgusTrendSample *Vgus_TrendSampleAt(uint8_t offset)
+{
+    return &trend_samples[(trend_next + VGUS_TREND_SAMPLES - trend_count + offset) % VGUS_TREND_SAMPLES];
+}
+
+static uint8_t Vgus_TrendVisible(const VgusTrendSample *sample, const VgusTrendSeries *series,
+                                 uint32_t newest_ms)
+{
+    return (sample->valid_mask & series->valid_bit) != 0U &&
+        newest_ms - sample->sampled_ms <= VGUS_TREND_WINDOW_MS;
+}
+
+static void Vgus_TrendPutWord(uint8_t **cursor, uint16_t word)
+{
+    *(*cursor)++ = (uint8_t)(word >> 8);
+    *(*cursor)++ = (uint8_t)word;
+}
+
+static uint8_t Vgus_TrendWrite(uint16_t vp, const uint8_t *data, uint16_t size)
+{
+    uint8_t frame[6U + VGUS_TREND_MAX_DATA] = {
+        0xA5U, 0x5AU, (uint8_t)(size + 3U), 0x82U, (uint8_t)(vp >> 8), (uint8_t)vp
+    };
+    memcpy(frame + 6U, data, size);
+    return HAL_UART_Transmit(&huart1, frame, size + 6U, VGUS_TREND_TX_MS) == HAL_OK;
+}
+
+static uint8_t Vgus_DrawTrendSeries(uint8_t channel, char *labels)
+{
+    const VgusTrendSeries *const series = &trend_series[channel];
+    const VgusTrendSample *const newest = trend_count ? Vgus_TrendSampleAt(trend_count - 1U) : NULL;
+    const uint32_t newest_ms = newest != NULL ? newest->sampled_ms : 0U;
+    int32_t min = 256;
+    int32_t max = -1;
+    for (uint8_t i = 0U; i < trend_count; ++i) {
+        const VgusTrendSample *const sample = Vgus_TrendSampleAt(i);
+        if (Vgus_TrendVisible(sample, series, newest_ms)) {
+            const int32_t value = sample->value[channel];
+            if (value < min) min = value;
+            if (value > max) max = value;
+        }
+    }
+
+    int32_t low = 0;
+    int32_t high = series->default_max;
+    if (max >= min) {
+        int32_t span = max - min + 2;
+        if (span < series->min_span) span = series->min_span;
+        if (span > series->ceiling) span = series->ceiling;
+        low = min - (span - (max - min)) / 2;
+        if (low < 0) low = 0;
+        if (low + span > series->ceiling) low = series->ceiling - span;
+        high = low + span;
+    }
+    if (newest != NULL && (newest->valid_mask & series->valid_bit) != 0U) {
+        Vgus_PutNumericText(labels, newest->value[channel], 0U, 0U);
+    } else {
+        Vgus_PutAlarmLabel(labels, "--");
+    }
+    Vgus_PutNumericText(labels + VGUS_TEXT_SLOT_BYTES, (uint16_t)high, 0U, 0U);
+    Vgus_PutNumericText(labels + 2U * VGUS_TEXT_SLOT_BYTES, (uint16_t)low, 0U, 0U);
+
+    /* 基本图形 000A 的每包是颜色和两个端点。无效点及长采样间隔都断开。 */
+    uint8_t data[4U + VGUS_TREND_SAMPLES * 10U];
+    uint8_t *cursor = data + 4U;
+    uint16_t segments = 0U;
+    const VgusTrendSample *previous = NULL;
+    uint16_t old_x = 0U;
+    uint16_t old_y = 0U;
+    for (uint8_t i = 0U; i < trend_count; ++i) {
+        const VgusTrendSample *const sample = Vgus_TrendSampleAt(i);
+        if (!Vgus_TrendVisible(sample, series, newest_ms)) {
+            previous = NULL;
+            continue;
+        }
+        const uint32_t age_ms = newest_ms - sample->sampled_ms;
+        const uint16_t x = VGUS_TREND_X_RIGHT -
+            age_ms * (VGUS_TREND_X_RIGHT - VGUS_TREND_X_LEFT) / VGUS_TREND_WINDOW_MS;
+        const uint16_t y = series->top + VGUS_TREND_HEIGHT -
+            (sample->value[channel] - low) * VGUS_TREND_HEIGHT / (high - low);
+        const uint8_t connect = previous != NULL && sample->sampled_ms - previous->sampled_ms <= VGUS_TREND_MAX_GAP_MS;
+        /* 有效点在缺口后重新开始。用一个短标记显示独立样本。 */
+        const uint16_t mark_x = x < VGUS_TREND_X_RIGHT ? x + 1U : x - 1U;
+        Vgus_TrendPutWord(&cursor, series->color);
+        Vgus_TrendPutWord(&cursor, connect ? old_x : mark_x);
+        Vgus_TrendPutWord(&cursor, connect ? old_y : y);
+        Vgus_TrendPutWord(&cursor, x);
+        Vgus_TrendPutWord(&cursor, y);
+        ++segments;
+        previous = sample;
+        old_x = x;
+        old_y = y;
+    }
+
+    const uint16_t size = (uint16_t)(cursor - data);
+    cursor = data;
+    Vgus_TrendPutWord(&cursor, segments ? 0x000AU : 0U);
+    Vgus_TrendPutWord(&cursor, segments);
+
+    /* 长点列先写后段，再写起始指令和点数，避免公布还未写齐的新点列。 */
+    if (size > VGUS_TREND_MAX_DATA &&
+        !Vgus_TrendWrite(series->vp + VGUS_TREND_MAX_DATA / 2U,
+                         data + VGUS_TREND_MAX_DATA, size - VGUS_TREND_MAX_DATA)) {
+        return 0U;
+    }
+    return Vgus_TrendWrite(series->vp, data, size > VGUS_TREND_MAX_DATA ? VGUS_TREND_MAX_DATA : size);
+}
+
+static void Vgus_SendTrend(uint32_t now_ms)
+{
+    static uint8_t retrying;
+    static uint32_t last_attempt_ms;
+    if (!trend_dirty || (retrying && now_ms - last_attempt_ms < VGUS_STATUS_POLL_MS)) {
+        return;
+    }
+    uint8_t labels[sizeof(trend_series) / sizeof(trend_series[0]) * VGUS_TREND_LABELS * VGUS_TEXT_SLOT_BYTES];
+    last_attempt_ms = now_ms;
+    for (uint8_t channel = 0U; channel < sizeof(trend_series) / sizeof(trend_series[0]); ++channel) {
+        if (!Vgus_DrawTrendSeries(channel, (char *)labels + channel * VGUS_TREND_LABELS * VGUS_TEXT_SLOT_BYTES)) {
+            retrying = 1U;
+            return;
+        }
+    }
+    retrying = !Vgus_TrendWrite(VGUS_TREND_LABELS_VP, labels, sizeof(labels));
+    trend_dirty = retrying;
 }
 
 /* 0x83 上报一个按键字，或响应一次连续读取 2–3 个待应用值。 */
@@ -512,6 +704,10 @@ static void Vgus_QueueTouchFrame(uint32_t now_ms)
     const uint16_t address = ((uint16_t)touch_frame[4] << 8) | touch_frame[5];
     const uint16_t value = ((uint16_t)touch_frame[7] << 8) | touch_frame[8];
     if (touch_frame[6] == 1U) {
+        if (address == VGUS_TREND_KEYS_VP && (value == VGUS_TREND_OPEN || value == VGUS_TREND_CLOSE)) {
+            trend_navigation = (uint8_t)value;
+            return;
+        }
         if (address == VGUS_HISTORY_KEYS_VP && value == 1U) {
             history_open_requested = 1U;
             return;
@@ -726,6 +922,8 @@ void Vgus_ProcessTouch(void)
     }
     const uint8_t history_open = history_open_requested;
     history_open_requested = 0U;
+    const uint8_t trend_requested = trend_navigation;
+    trend_navigation = 0U;
     __set_PRIMASK(primask);
 
     CommandEntry commands[VGUS_TOUCH_CONTROL_COUNT];
@@ -744,5 +942,11 @@ void Vgus_ProcessTouch(void)
     if (history_open) {
         history_dirty = 1U;
     }
-    Vgus_SendAlarmHistory(HAL_GetTick());
+    const uint32_t now_ms = HAL_GetTick();
+    Vgus_SendAlarmHistory(now_ms);
+    if (trend_requested != 0U) {
+        trend_open = trend_requested == VGUS_TREND_OPEN;
+        trend_dirty = trend_open;
+    }
+    Vgus_SendTrend(now_ms);
 }

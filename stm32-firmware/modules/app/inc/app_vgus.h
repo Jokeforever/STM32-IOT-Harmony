@@ -16,7 +16,7 @@ typedef enum {
 void Vgus_UpdateLinkStatus(VgusLinkState state, uint32_t now_ms);
 
 /* USART1 初始化后，每个采集周期发送一次环境读数与现有补水估算。 */
-void Vgus_DisplayEnvironment(const SensorData *sensors, float water_volume_l);
+void Vgus_DisplayEnvironment(const SensorData *sensors, float water_volume_l, uint32_t sampled_ms);
 
 /* 主循环执行控制逻辑后调用。 */
 void Vgus_UpdateActuators(uint32_t now_ms);

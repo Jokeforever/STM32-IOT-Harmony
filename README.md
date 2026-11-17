@@ -1,5 +1,9 @@
 # STM32-IOT-Harmony
 
+## VGUS 温湿度趋势
+
+串口屏首页可查看温湿度短时趋势。上下分图显示最新值、动态纵轴及采样缺口，在断网时也可查看。 [采样、通信与实测](docs/40-VGUS-Temperature-Humidity-Trends.md)
+
 ## VGUS 告警记录
 
 从串口屏告警页可查看本次开机最近 6 条触发与恢复事件，包含发生时的读数和主控运行时间。 [记录规则与复验](docs/39-VGUS-Alarm-History.md)
