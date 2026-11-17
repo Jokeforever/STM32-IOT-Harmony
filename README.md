@@ -1,5 +1,9 @@
 # STM32-IOT-Harmony
 
+## 本地优先启动与 MQTT 重连
+
+设备在等待热点或云端连接时仍可从串口屏操作和查看采集。建立会话后恢复 OneNET 上报与远程控制。 [启动、上报与复验](docs/42-Local-First-Boot-and-MQTT-Recovery.md)
+
 ## VGUS 设备诊断
 
 从串口屏设备状态页可进入只读诊断，查看最近一次复位、各联网阶段结果和传感器采集状态。 [字段、地址与实测](docs/41-VGUS-Device-Diagnostics.md)

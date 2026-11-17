@@ -525,6 +525,11 @@
               <FilePath>..\modules\app\src\app_vgus.c</FilePath>
             </File>
             <File>
+              <FileName>app_network_startup.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\modules\app\src\app_network_startup.c</FilePath>
+            </File>
+            <File>
               <FileName>app_pump_port.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\modules\app\src\app_pump_port.c</FilePath>

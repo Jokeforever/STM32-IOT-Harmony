@@ -50,6 +50,7 @@
 #include "mw_config.h"
 #include "app_sensors.h"
 #include "app_vgus.h"
+#include "app_network_startup.h"
 #include "app_commands.h"
 
 //硬件驱动
@@ -82,7 +83,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define ESP8266_ONENET_INFO		"AT+CIPSTART=\"TCP\",\"mqtts.heclouds.com\",1883\r\n"
 #define ONENET_UPLOAD_INTERVAL	5000	// 5s
 #define USE_WATCHDOG			1
 
@@ -98,7 +98,6 @@
 /* USER CODE BEGIN PV */
 Key Keys[4];
 float water_vol = 0.0f;
-extern uint8_t esp8266_buf[512];
 volatile Abnormal abnormal[3] = {NONE};
 volatile DisplayScreen CurrentScreen = DISPLAY_NONE; // 当前显示界面
 
@@ -128,20 +127,6 @@ static VgusResetCause Diagnostics_ResetCause(uint32_t flags)
     if (flags & RCC_CSR_PORRSTF) return VGUS_RESET_POWER;
     if (flags & RCC_CSR_PINRSTF) return VGUS_RESET_PIN;
     return VGUS_RESET_UNKNOWN;
-}
-
-static _Bool ConnectOneNetTcp(void)
-{
-    const _Bool failed = ESP8266_SendCmd(ESP8266_ONENET_INFO, "CONNECT");
-    Vgus_RecordNetworkResult(VGUS_DIAG_TCP, !failed);
-    return failed;
-}
-
-static _Bool LoginOneNetMqtt(void)
-{
-    const _Bool failed = OneNet_DevLink();
-    Vgus_RecordNetworkResult(VGUS_DIAG_MQTT, !failed);
-    return failed;
 }
 
 /* USER CODE END 0 */
@@ -187,11 +172,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	uint32_t last_upload_tick = 0;
 	uint32_t last_report_attempt_tick = 0;
-	uint32_t last_reconnect_tick = 0;
 	uint32_t last_led_control_tick = 0;
 	unsigned char *dataPtr = NULL;
-	uint8_t net_retry = 0;
-	uint8_t login_retry = 0;
 	uint8_t alarm_data_ready = 0U;
 	Vgus_UpdateLinkStatus(VGUS_LINK_INITIALIZING, HAL_GetTick());
 	AppConfig_Init();
@@ -204,34 +186,6 @@ int main(void)
 	HAL_TIM_Base_Start_IT(&htim1);
 	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_2);
 	Mode_Switch();
-	Vgus_UpdateLinkStatus(VGUS_LINK_CONNECTING_WIFI, HAL_GetTick());
-	const Esp8266InitResult wifi_start = ESP8266_Init();
-	Vgus_RecordNetworkResult(VGUS_DIAG_AT, wifi_start.at_ok);
-	Vgus_RecordNetworkResult(VGUS_DIAG_IP, wifi_start.wifi_ip_ok);
-	OLED_Clear();
-	OLED_ShowString(0,0,(uint8_t*)" Connect MQTTs Server...",16);
-	Vgus_UpdateLinkStatus(VGUS_LINK_CONNECTING_CLOUD, HAL_GetTick());
-	net_retry = 0;
-	_Bool tcp_failed = ConnectOneNetTcp();
-	while(tcp_failed && net_retry++ < 5)
-	{
-		delay_ms(500);
-		tcp_failed = ConnectOneNetTcp();
-	}
-	OLED_ShowString(0,4,(uint8_t*)(tcp_failed ? "Connect TCP Fail" : "Connect TCP OK"),16);
-		delay_ms(500);
-	OLED_Clear();
-	OLED_ShowString(0,3,(uint8_t*)" Device login...",16);
-	//等待onenet平台连接
-	login_retry = 0;
-	while(LoginOneNetMqtt() && login_retry++ < 5)
-	{
-		(void)ConnectOneNetTcp();
-		delay_ms(500);
-	}		//接入OneNET
-		delay_ms(500);
-	
-	OneNET_Subscribe();
 	Watchdog_Init();
 	OLED_Clear();
 	CurrentScreen = DISPLAY_NONE;
@@ -251,8 +205,17 @@ int main(void)
     /* USER CODE BEGIN 3 */
 		
 		Key_Func();
-		Vgus_UpdateLinkStatus(OneNet_IsConnected() ? VGUS_LINK_ONLINE : VGUS_LINK_LOCAL_ONLY,
-		                       HAL_GetTick());
+        const uint32_t startup_tick = HAL_GetTick();
+        const AppNetworkStartupState startup_state = AppNetworkStartup_Poll(startup_tick);
+        const uint8_t startup_online = startup_state == APP_STARTUP_ONLINE;
+        static const VgusLinkState startup_links[] = {
+            [APP_STARTUP_WIFI] = VGUS_LINK_CONNECTING_WIFI,
+            [APP_STARTUP_CLOUD] = VGUS_LINK_CONNECTING_CLOUD,
+            [APP_STARTUP_OFFLINE] = VGUS_LINK_LOCAL_ONLY
+        };
+        Vgus_UpdateLinkStatus(startup_online
+            ? (OneNet_IsConnected() ? VGUS_LINK_ONLINE : VGUS_LINK_LOCAL_ONLY)
+            : startup_links[startup_state], HAL_GetTick());
 
 		if ((AppConfig_Get()->led_mode == MODE_AUTO_PID) &&
 		    ((HAL_GetTick() - last_led_control_tick) >= LED_CONTROL_INTERVAL_MS))
@@ -262,19 +225,6 @@ int main(void)
 			if (SensorService_ReadLight() != 0U)
 			{
 				LED_Update(SensorService_GetData()->light_lux);
-			}
-		}
-
-		if(!OneNet_IsConnected() &&
-		   (HAL_GetTick() - last_reconnect_tick >= 10000))
-		{
-			last_reconnect_tick = HAL_GetTick();
-			if(ConnectOneNetTcp() == 0)
-			{
-				if(LoginOneNetMqtt() == 0)
-				{
-					OneNET_Subscribe();
-				}
 			}
 		}
 
@@ -288,9 +238,10 @@ int main(void)
         }
         /* 命令先处理，输出业务更新后再上报；事件上报不推迟5秒采集时钟。 */
 
-				dataPtr = ESP8266_GetIPD(0);
-				if(dataPtr != NULL)
-				OneNet_RevPro(dataPtr);
+                if (startup_online) {
+                    dataPtr = ESP8266_GetIPD(0);
+                    if (dataPtr != NULL) OneNet_RevPro(dataPtr);
+                }
 				
 				Vgus_ProcessTouch();
 				Bump_Control();
@@ -305,12 +256,14 @@ int main(void)
                 if (alarm_data_ready) {
                     Vgus_UpdateAlarms(HAL_GetTick(), SensorService_GetData(), abnormal);
                 }
-                now_tick = HAL_GetTick();
-                if (periodic_report_due || AppCommands_ReportDue(now_tick, last_report_attempt_tick, OneNet_IsConnected()))
-                {
-                    last_report_attempt_tick = now_tick;
-                    if (OneNet_SendData() == 0) AppCommands_ReportSent(); /* 现有接口：0成功，1失败。 */
-                    ESP8266_Clear();
+                if (startup_online && OneNet_IsConnected()) {
+                    now_tick = HAL_GetTick();
+                    if (periodic_report_due || AppCommands_ReportDue(now_tick, last_report_attempt_tick, OneNet_IsConnected()))
+                    {
+                        last_report_attempt_tick = now_tick;
+                        if (OneNet_SendData() == 0) AppCommands_ReportSent(); /* 现有接口：0成功，1失败。 */
+                        ESP8266_Clear();
+                    }
                 }
 				Display_Data();
 

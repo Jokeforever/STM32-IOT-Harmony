@@ -23,6 +23,7 @@
 #include "usart.h"
 #include "usart3.h"
 #include "app_vgus.h"
+#include "esp8266.h"
 
 
 //C库
@@ -35,8 +36,6 @@
 //static char uart1_rx_buffer[MAX_CMD_LENGTH];
 //static uint16_t uart1_rx_index = 0;
 
-extern uint8_t esp8266_buf[512];     // 你的接收缓冲区
-extern unsigned short esp8266_cnt;
 volatile uint8_t received_data;
 
 /*
@@ -276,23 +275,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             Vgus_TouchRxComplete();
         return;
     }
-    if(huart == &huart2)
+    if (huart == &huart2)
     {
-//        uint8_t received_data = huart->pRxBuffPtr[0]; // huart->pRxBuffPtr 指向启动接收时传入的缓冲区
-
-        // 2. 应用你原有的防止溢出和存储数据的逻辑
-        if (esp8266_cnt >= sizeof(esp8266_buf))
-        {
-            esp8266_cnt = 0; // 防止串口被刷爆 (回绕)
-        }
-        esp8266_buf[esp8266_cnt++] = received_data; // 存储接收到的数据
-
-        // ****** 核心功能结束 (HAL 版本) ******
-
-        // 5. 重新启动接收，准备接收下一个字节
-        // 注意：这里的缓冲区地址和大小应该是你最初调用 HAL_UART_Receive_IT 时使用的
-        // 如果你传入的是 esp8266_buf 并且大小是 1，这里也一样
-        HAL_UART_Receive_IT(&huart2, (uint8_t *)&received_data, 1); // huart->pRxBuffPtr 确保就是你之前传入的缓冲区
+        ESP8266_RxByte(received_data);
+        (void)HAL_UART_Receive_IT(&huart2, (uint8_t *)&received_data, 1U);
     }
 		 else if(huart->Instance == USART3)
     {
@@ -354,6 +340,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
-    if (huart == &huart1)
+    if (huart == &huart1) {
         Vgus_TouchRxError();
+    } else if (huart == &huart2) {
+        ESP8266_RxError();
+        (void)HAL_UART_Receive_IT(&huart2, (uint8_t *)&received_data, 1U);
+    }
 }

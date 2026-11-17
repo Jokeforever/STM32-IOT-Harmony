@@ -1,5 +1,9 @@
 # STM32 端工程说明
 
+## 本地优先启动与 MQTT 重连
+
+串口屏、采集和控制在联网等待期间运行。设置应答和属性上报通过同一发送流程，掉线后清理旧 TCP 再重新订阅。 [启动流程及复验](../docs/42-Local-First-Boot-and-MQTT-Recovery.md)
+
 ## VGUS 设备诊断
 
 第 17 页显示 STM32 复位原因、运行时长、网络阶段结果和传感器状态。主控区分上次建连的实际结果和当前 OneNET 连接状态。 [诊断字段和串口约定](../docs/41-VGUS-Device-Diagnostics.md)

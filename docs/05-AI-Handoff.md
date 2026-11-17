@@ -1,5 +1,9 @@
 # 项目 AI 交接文档
 
+## 2026-11-17 本地优先启动与 MQTT 重连
+
+`main.c` 完成本地初始化后进入主循环。`app_network_startup.c` 统一推进启动和重连，`esp8266.c` 管理 USART2 握手和发送完成应答。目标为 64 KB Flash，当前 Keil 链接区余 784 字节。 [流程与实测记录](42-Local-First-Boot-and-MQTT-Recovery.md)
+
 ## 2026-11-17 串口屏设备诊断
 
 原 SmartGrow-VTc 第 1 页可进第 17 页。`main.c` 捕获 RCC 复位标志和 TCP、MQTT 结果，`ESP8266_Init()` 返回 AT 和获取 IP 结果。`app_vgus.c` 汇总后以 `0x0688` 为首地址写入 11 格，换板时可复用页面和协议。 [状态含义与串口地址](41-VGUS-Device-Diagnostics.md)

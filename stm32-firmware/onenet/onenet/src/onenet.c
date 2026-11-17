@@ -79,7 +79,6 @@ char key[48];
 static _Bool one_net_connected = 0;
 
 
-extern unsigned char esp8266_buf[512];
 
 
 /*
@@ -414,69 +413,72 @@ _Bool OneNET_RegisterDevice(void)
 //
 //	说明：		与onenet平台建立连接
 //==========================================================
+static uint8_t OneNet_BuildConnectPacket(MQTT_PACKET_STRUCTURE *packet)
+{
+    char authorization_buf[160];
+    if (OneNET_Authorization("2018-10-31", PROID, 1956499200, ACCESS_KEY, DEVICE_NAME,
+                            authorization_buf, sizeof(authorization_buf), 0) != 0) {
+        return 1U;
+    }
+    return MQTT_PacketConnect(PROID, authorization_buf, DEVICE_NAME, 256, 1,
+                              MQTT_QOS_LEVEL0, NULL, NULL, 0, packet);
+}
+
+static uint8_t OneNet_BuildSubscribePacket(MQTT_PACKET_STRUCTURE *packet)
+{
+    char topic_buf[60];
+    const char *topic = topic_buf;
+    snprintf(topic_buf, sizeof(topic_buf), "$sys/%s/%s/thing/property/set", PROID, DEVICE_NAME);
+    return MQTT_PacketSubscribe(MQTT_SUBSCRIBE_ID, MQTT_QOS_LEVEL0, &topic, 1, packet);
+}
+
+static MQTT_PACKET_STRUCTURE startup_mqtt_packet;
+static uint8_t startup_subscribing;
+
+uint8_t OneNet_StartupBegin(uint8_t subscribe, uint32_t now_ms)
+{
+    startup_subscribing = subscribe;
+    if (!subscribe) one_net_connected = 0;
+    const uint8_t failed = subscribe
+        ? OneNet_BuildSubscribePacket(&startup_mqtt_packet) : OneNet_BuildConnectPacket(&startup_mqtt_packet);
+    if (failed || !ESP8266_StartupBeginPacket(startup_mqtt_packet._data, startup_mqtt_packet._len, now_ms)) {
+        MQTT_DeleteBuffer(&startup_mqtt_packet);
+        one_net_connected = 0;
+        return 0U;
+    }
+    return 1U;
+}
+
+Esp8266StartupResult OneNet_StartupPoll(uint32_t now_ms)
+{
+    uint8_t ack[4];
+    Esp8266StartupResult result = ESP8266_StartupPollPacket(now_ms, ack,
+                                                          startup_subscribing ? 0U : sizeof(ack));
+    if (result == ESP8266_START_WAIT) return result;
+
+    MQTT_DeleteBuffer(&startup_mqtt_packet);
+    if (!startup_subscribing && result == ESP8266_START_OK &&
+        (ack[0] != 0x20U || ack[1] != 2U || ack[2] > 1U || MQTT_UnPacketConnectAck(ack) != 0U)) {
+        result = ESP8266_START_FAIL;
+    }
+    one_net_connected = result == ESP8266_START_OK;
+    return result;
+}
+
 _Bool OneNet_DevLink(void)
 {
-	
-	MQTT_PACKET_STRUCTURE mqttPacket = {NULL, 0, 0, 0};					//协议包
-
-	unsigned char *dataPtr;
-	
-	char authorization_buf[160];
-	
-	_Bool status = 1;
-	
-	OneNET_Authorization("2018-10-31", PROID, 1956499200, ACCESS_KEY, DEVICE_NAME,
-								authorization_buf, sizeof(authorization_buf), 0);
-
-//	UsartPrintf(USART_DEBUG, "OneNET_DevLink\r\n"
-//							"NAME: %s,	PROID: %s,	KEY:%s\r\n"
-//                        , DEVICE_NAME, PROID, authorization_buf);
-						
-	if(MQTT_PacketConnect(PROID, authorization_buf, DEVICE_NAME, 256, 1, MQTT_QOS_LEVEL0, NULL, NULL, 0, &mqttPacket) == 0)
-	{
-
-		ESP8266_SendData(mqttPacket._data, mqttPacket._len);			//上传平台
-	
-		dataPtr = ESP8266_GetIPD(250);									//等待平台响应
-		
-
-		if(dataPtr != NULL)
-		{
-			if(MQTT_UnPacketRecv(dataPtr) == MQTT_PKT_CONNACK)
-			{
-				switch(MQTT_UnPacketConnectAck(dataPtr))
-				{
-					case 0:;status = 0;break;
-					
-					case 1:;break;
-					case 2:;break;
-					case 3:;break;
-					case 4:;break;
-					case 5:;break;
-					
-					default:;break;
-//					case 0:UsartPrintf(USART_DEBUG, "Tips:	杩炴帴鎴愬姛\r\n");status = 0;break;
-//					
-//					case 1:UsartPrintf(USART_DEBUG, "WARN:	杩炴帴澶辫触锛氬崗璁敊璇痋r\n");break;
-//					case 2:UsartPrintf(USART_DEBUG, "WARN:	杩炴帴澶辫触锛氶潪娉曠殑clientid\r\n");break;
-//					case 3:UsartPrintf(USART_DEBUG, "WARN:	杩炴帴澶辫触锛氭湇鍔″櫒澶辫触\r\n");break;
-//					case 4:UsartPrintf(USART_DEBUG, "WARN:	杩炴帴澶辫触锛氱敤鎴峰悕鎴栧瘑鐮侀敊璇痋r\n");break;
-//					case 5:UsartPrintf(USART_DEBUG, "WARN:	杩炴帴澶辫触锛氶潪娉曢摼鎺?姣斿token闈炴硶)\r\n");break;
-//					
-//					default:UsartPrintf(USART_DEBUG, "ERR:	杩炴帴澶辫触锛氭湭鐭ラ敊璇痋r\n");break;
-				}
-			}
-		}
-
-		MQTT_DeleteBuffer(&mqttPacket);						//删包
-
-	}
-//	else
-////		UsartPrintf(USART_DEBUG, "WARN:	MQTT_PacketConnect Failed\r\n");
-	
-	one_net_connected = (status == 0);
-	return status;
-	
+    MQTT_PACKET_STRUCTURE packet = {NULL, 0, 0, 0};
+    _Bool failed = 1;
+    if (OneNet_BuildConnectPacket(&packet) == 0U) {
+        ESP8266_SendData(packet._data, packet._len);
+        unsigned char *const reply = ESP8266_GetIPD(250);
+        if (reply != NULL && MQTT_UnPacketRecv(reply) == MQTT_PKT_CONNACK) {
+            failed = MQTT_UnPacketConnectAck(reply) != 0U;
+        }
+        MQTT_DeleteBuffer(&packet);
+    }
+    one_net_connected = !failed;
+    return failed;
 }
 
 extern float water_vol;
@@ -651,27 +653,13 @@ void OneNET_Publish(const char *topic, const char *msg)
 //==========================================================
 void OneNET_Subscribe(void)
 {
-
-	MQTT_PACKET_STRUCTURE mqtt_packet = {NULL, 0, 0, 0};						//协议包
-		
-	char topic_buf[60];
-	const char *topic = topic_buf;
-		
-	snprintf(topic_buf, sizeof(topic_buf), "$sys/%s/%s/thing/property/set", PROID, DEVICE_NAME);
-	
-//	UsartPrintf(USART_DEBUG, "Subscribe Topic: %s\r\n", topic_buf);
-	
-	if(MQTT_PacketSubscribe(MQTT_SUBSCRIBE_ID, MQTT_QOS_LEVEL0, &topic, 1, &mqtt_packet) == 0)
-	{
-		if(ESP8266_SendData(mqtt_packet._data, mqtt_packet._len) != 0)
-		{
-			one_net_connected = 0;
-		}
-		
-		MQTT_DeleteBuffer(&mqtt_packet);										//删包
-	}
-
-
+    MQTT_PACKET_STRUCTURE packet = {NULL, 0, 0, 0};
+    if (OneNet_BuildSubscribePacket(&packet) == 0U) {
+        if (ESP8266_SendData(packet._data, packet._len) != 0) {
+            one_net_connected = 0;
+        }
+        MQTT_DeleteBuffer(&packet);
+    }
 }
 
 _Bool OneNet_IsConnected(void)

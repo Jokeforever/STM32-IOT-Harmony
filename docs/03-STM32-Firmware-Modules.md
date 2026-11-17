@@ -1,5 +1,9 @@
 # STM32 端代码功能讲解（完整版）
 
+## 本地优先启动的数据与控制顺序
+
+本地触摸、采样和控制随主循环运行。`AppNetworkStartup_Poll()` 负责逐步启动 Wi-Fi 和 MQTT，完成握手后允许上报与云端控制。遇到发送失败保留待上报状态，重建连接后再补报。 [模块和实测](42-Local-First-Boot-and-MQTT-Recovery.md)
+
 ## VGUS 设备诊断链路
 
 `main.c` 在启动时记录硬件复位原因，联网流程旁记录各阶段结果。`app_vgus.c` 复用传感器有效位并累计距上次有效的时间，在诊断页显示。 [采集、联网和复位字段](41-VGUS-Device-Diagnostics.md)
